@@ -1,0 +1,3868 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>WGXC Tower Fallback</title>
+    <!-- PWA: installable shell (Android/Chrome "Install app") -->
+    <link rel="manifest" href="/static/manifest.webmanifest">
+    <meta name="theme-color" content="#1a1b26">
+    <link rel="icon" href="/static/icon-192.png">
+    <link rel="apple-touch-icon" href="/static/icon-192.png">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Tower">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            /* Tokyo Night */
+            --bg:            #1a1b26;
+            --surface:       #16161e;
+            --border-solid:  #292e42;
+            --text:          #c0caf5;
+            --muted:         #565f89;
+            --dim:           #a9b1d6;
+            --purple:        #bb9af7;
+            --purple-bg:     rgba(187,154,247,0.10);
+            --purple-border: rgba(187,154,247,0.35);
+            --cyan:          #7dcfff;
+            --cyan-bg:       rgba(125,207,255,0.10);
+            --cyan-border:   rgba(125,207,255,0.40);
+            --red:           #f776b2;
+            --red-bg:        rgba(247,118,178,0.12);
+            --red-border:    rgba(247,118,178,0.40);
+            --green:         #9ece6a;
+            --blue:          #7aa2f7;
+            --orange:        #ff9e64;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ── Header ── */
+        header {
+            border-bottom: 1px solid var(--border-solid);
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;   /* spacer | title | status — title truly centered */
+            align-items: stretch;
+            height: 34px;
+            flex-shrink: 0;
+        }
+        .header-spacer { min-width: 0; }
+        .header-title {
+            display: flex; align-items: center; justify-content: center;
+            padding: 0 18px;
+            font-size: 10px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase;
+            color: #fff; white-space: nowrap;
+        }
+        .header-status {
+            display: flex; align-items: center; justify-content: flex-end;
+            padding: 0 18px; gap: 8px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px; color: var(--dim);
+            white-space: nowrap;
+        }
+        .header-dot {
+            width: 7px; height: 7px; border-radius: 50%;
+            background: var(--muted); flex-shrink: 0; transition: background .3s;
+        }
+        .header-dot.ok   { background: var(--green); }
+        .header-dot.live { background: var(--cyan); animation: pulse 1.2s infinite; }
+        .header-dot.err  { background: var(--red); }
+
+        @keyframes pulse {
+            0%,100% { box-shadow: 0 0 0 0 rgba(125,207,255,.6); }
+            50%      { box-shadow: 0 0 0 5px rgba(125,207,255,0); }
+        }
+        @keyframes pulse-slow {
+            0%,100% { box-shadow: 0 0 0 0 rgba(158,206,106,.4); }
+            50%      { box-shadow: 0 0 0 6px rgba(158,206,106,0); }
+        }
+
+        /* ── 3-column layout ── */
+        .page-layout {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 190px 1fr 190px;
+            max-width: 980px;
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        /* ── Side panels ── */
+        .side-panel {
+            padding: 20px 14px 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            border-right: 1px solid var(--border-solid);
+            position: sticky;
+            top: 0;
+            height: 100vh;
+        }
+        .side-panel.right {
+            border-right: none;
+            border-left: 1px solid var(--border-solid);
+        }
+        .side-label {
+            font-size: 9px; font-weight: 700; letter-spacing: .16em;
+            text-transform: uppercase; color: var(--dim);
+            align-self: stretch; text-align: center;
+        }
+
+        /* LUFS gauge SVG */
+        .lufs-gauge { width: 100%; }
+
+        /* Stream open link (replaces play button) */
+        .side-open-link {
+            display: block;
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border-solid);
+            background: rgba(255,255,255,0.03);
+            color: var(--text);
+            font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+            text-decoration: none; text-align: center;
+            transition: all .15s;
+        }
+        .side-open-link.violet { border-left: 3px solid var(--purple); }
+        .side-open-link.violet:hover { background: var(--purple-bg); color: var(--purple); border-color: var(--purple-border); }
+        .side-open-link.teal   { border-left: 3px solid var(--cyan); }
+        .side-open-link.teal:hover   { background: var(--cyan-bg);   color: var(--cyan);   border-color: var(--cyan-border); }
+
+        /* Mobile-only quick-links: surfaces the rail "Open Stream" links when the
+           side rails are hidden. Hidden on desktop; revealed in the media query. */
+        .mobile-quick-links { display: none; }
+
+        /* Mobile-only master readout (replaces the draggable master fader on phones —
+           master should sit at unity, so it's a status line + reset, not a slider). */
+        .mixer-readout { display: none; }
+        .mixer-readout-label {
+            font-size: 8px; font-weight: 700; letter-spacing: .12em;
+            text-transform: uppercase; color: var(--muted);
+        }
+        .mixer-readout-val {
+            font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 700;
+            color: var(--dim);
+        }
+        .mixer-readout-val.off-unity { color: var(--orange); }
+        .mixer-readout-reset {
+            margin-left: auto;
+            background: var(--purple-bg); border: 1px solid var(--purple-border);
+            color: var(--purple); border-radius: 4px; padding: 10px 16px;
+            font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700;
+            letter-spacing: .08em; text-transform: uppercase; min-height: 44px;
+        }
+
+        .side-stream-link {
+            margin-top: auto;
+            display: flex; align-items: center; gap: 6px;
+            font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+            color: var(--muted); text-decoration: none; transition: color .15s;
+            padding: 8px 0; border-top: 1px solid var(--border-solid);
+            width: 100%; justify-content: center;
+        }
+        .side-stream-link:hover { color: var(--text); }
+        .side-link-dot {
+            width: 6px; height: 6px; border-radius: 50%;
+            background: var(--muted); flex-shrink: 0; transition: background .3s;
+        }
+        .side-link-dot.live { background: var(--green); animation: pulse-slow 2s infinite; }
+
+        /* ── Center main ── */
+        main {
+            padding: 24px 20px 40px;
+            display: flex; flex-direction: column; gap: 0;
+            min-width: 0;
+        }
+
+        /* ── Section blocks ── */
+        .section-head {
+            display: flex; align-items: center; justify-content: space-between;
+            border: 1px solid var(--border-solid); border-bottom: none;
+            padding: 8px 14px; background: var(--surface);
+        }
+        .section-head h2 {
+            font-size: 10px; font-weight: 700; letter-spacing: .16em;
+            text-transform: uppercase; color: var(--text);
+        }
+        .section-head .badge {
+            font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--dim);
+        }
+        .section-head-left { display: flex; flex-direction: column; gap: 3px; }
+        .section-subtitle {
+            font-size: 8px; font-weight: 400; letter-spacing: .04em;
+            color: var(--muted); text-transform: none;
+        }
+        .section-head-right { display: flex; align-items: center; gap: 8px; }
+        .sig-pill {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 8px; font-weight: 700; letter-spacing: .1em;
+            padding: 2px 6px; border-radius: 2px; text-transform: uppercase;
+        }
+        .sig-pill.tx {
+            background: rgba(255,158,100,.12); border: 1px solid rgba(255,158,100,.35);
+            color: var(--orange);
+        }
+        .sig-pill.browser {
+            background: rgba(122,162,247,.10); border: 1px solid rgba(122,162,247,.28);
+            color: var(--blue);
+        }
+        .section-body {
+            border: 1px solid var(--border-solid);
+            background: var(--surface);
+            margin-bottom: 20px;
+        }
+
+        /* ── Active source status ── */
+        .source-display {
+            padding: 22px 20px 18px;
+            display: flex; align-items: center; gap: 16px;
+        }
+        .source-dot {
+            width: 12px; height: 12px; border-radius: 50%;
+            background: var(--muted); flex-shrink: 0; transition: background .3s;
+        }
+        .source-dot.live      { background: var(--cyan); animation: pulse 1.2s infinite; }
+        .source-dot.emergency { background: var(--red); }
+        .source-dot.automation { background: var(--purple); }
+        .source-dot.err       { background: var(--red); opacity: .4; }
+
+        .source-name {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 26px; font-weight: 700; letter-spacing: -0.02em;
+            color: #fff; transition: color .3s; line-height: 1;
+        }
+        .source-name.source-live      { color: var(--cyan);   text-shadow: 0 0 24px rgba(125,207,255,.35); }
+        .source-name.source-emergency { color: var(--red);    text-shadow: 0 0 24px rgba(247,118,178,.35); }
+        .source-name.source-automation{ color: var(--purple); text-shadow: 0 0 24px rgba(187,154,247,.35); }
+        .source-name.source-err       { color: var(--muted); font-size: 13px; }
+
+        .source-name.silent {
+            color: var(--red) !important;
+            text-shadow: 0 0 15px rgba(255,0,0,0.5);
+            animation: flash-red 1s infinite;
+        }
+
+        @keyframes flash-red {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .status-light {
+            display: inline-block;
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+            vertical-align: middle;
+            background: var(--green);
+            box-shadow: 0 0 10px var(--green);
+            transition: all 0.3s;
+        }
+        .status-light.off {
+            background: var(--red);
+            box-shadow: 0 0 10px var(--red);
+        }
+
+        /* ── Local Audio Player ── */
+        .emergency-browser { display: none; border-top: 1px solid var(--border-solid); }
+        .emergency-browser.visible { display: block; }
+        .stream-selector-panel { display: none; }
+        .stream-selector-panel.visible { display: block; }
+
+        /* LCD Display */
+        .mp-display {
+            background: var(--surface);
+            padding: 12px 16px 10px;
+            border-bottom: 1px solid rgba(158,206,106,0.12);
+        }
+        .mp-row1 {
+            display: flex; align-items: center; gap: 10px; margin-bottom: 7px;
+        }
+        .mp-tracknum {
+            font-family: 'JetBrains Mono', monospace; font-size: 9px;
+            color: rgba(158,206,106,0.4); flex-shrink: 0; letter-spacing: .04em; min-width: 38px;
+        }
+        .mp-title-clip { flex: 1; overflow: hidden; }
+        .mp-title {
+            font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700;
+            color: var(--green); white-space: nowrap; display: inline-block;
+            text-shadow: 0 0 8px rgba(158,206,106,0.45);
+        }
+        .mp-title.scroll { animation: mp-scroll 16s linear infinite; }
+        @keyframes mp-scroll {
+            0%,12%  { transform: translateX(0); }
+            88%,100%{ transform: translateX(var(--scroll-dist, -60%)); }
+        }
+        .mp-time {
+            font-family: 'JetBrains Mono', monospace; font-size: 9px;
+            color: rgba(158,206,106,0.45); flex-shrink: 0; letter-spacing: .04em;
+        }
+        .mp-progress-rail {
+            width: 100%; height: 3px; background: rgba(158,206,106,0.12); border-radius: 2px;
+        }
+        .mp-progress-fill {
+            height: 100%; background: var(--green); border-radius: 2px; width: 0%;
+            box-shadow: 0 0 6px rgba(158,206,106,0.4); transition: width 1s linear;
+        }
+
+        /* Controls */
+        .mp-controls {
+            display: flex; align-items: center; gap: 5px;
+            padding: 9px 16px; background: var(--surface);
+            border-bottom: 1px solid var(--border-solid);
+        }
+        .p-btn {
+            background: transparent; border: 1px solid rgba(255,255,255,0.07);
+            color: var(--dim); width: 44px; height: 36px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 16px; cursor: pointer; border-radius: 4px; transition: all .1s;
+            flex-shrink: 0;
+        }
+        .p-btn:hover { background: rgba(255,255,255,0.06); color: var(--text); border-color: rgba(255,255,255,.18); }
+        .p-btn.p-play {
+            width: 52px; background: rgba(158,206,106,0.08);
+            border-color: rgba(158,206,106,0.28); color: var(--green); font-size: 20px;
+        }
+        .p-btn.p-play:hover { background: rgba(158,206,106,0.16); }
+        .p-btn.p-stop {
+            width: 52px; background: rgba(247,118,178,0.08);
+            border-color: rgba(247,118,178,0.28); color: var(--red); font-size: 18px;
+        }
+        .p-btn.p-stop:hover { background: rgba(247,118,178,0.16); }
+
+        /* Playlist */
+        .mp-pl-bar {
+            display: flex; align-items: center; gap: 6px;
+            padding: 7px 16px; border-bottom: 1px solid var(--border-solid);
+        }
+        .mp-pl-label {
+            font-size: 8px; font-weight: 700; letter-spacing: .16em;
+            text-transform: uppercase; color: var(--muted); flex: 1;
+        }
+        .mp-pl-btn {
+            padding: 3px 9px; border: 1px solid var(--border-solid);
+            background: transparent; color: var(--dim); font-size: 9px; font-weight: 700;
+            letter-spacing: .08em; text-transform: uppercase; cursor: pointer;
+            border-radius: 2px; transition: all .12s;
+        }
+        .mp-pl-btn:hover { border-color: var(--green); color: var(--green); }
+        .mp-playlist {
+            max-height: 210px; overflow-y: auto;
+            scrollbar-width: thin; scrollbar-color: rgba(158,206,106,.15) transparent;
+        }
+        .pl-item {
+            display: flex; align-items: center; gap: 9px;
+            padding: 7px 16px; cursor: pointer; transition: background .08s;
+            border-bottom: 1px solid rgba(255,255,255,0.025);
+        }
+        .pl-item:last-child { border-bottom: none; }
+        .pl-item:hover { background: rgba(255,255,255,0.04); }
+        .pl-item.active { background: rgba(158,206,106,0.07); border-left: 2px solid var(--green); padding-left: 14px; }
+        .pl-num {
+            font-family: 'JetBrains Mono', monospace; font-size: 9px;
+            color: var(--muted); width: 18px; text-align: right; flex-shrink: 0;
+        }
+        .pl-item.active .pl-num { color: rgba(158,206,106,0.55); }
+        .pl-name {
+            font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--dim);
+            flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .pl-item.active .pl-name { color: var(--green); }
+        .pl-now { font-size: 8px; color: var(--green); flex-shrink: 0; opacity: 0; }
+        .pl-item.active .pl-now { opacity: 1; animation: pulse 1.2s infinite; }
+
+        /* Playlist Presets */
+        .mp-presets {
+            display: flex; align-items: center; gap: 8px;
+            padding: 10px 16px; border-bottom: 1px solid var(--border-solid);
+            flex-wrap: wrap;
+        }
+        .preset-label {
+            font-size: 8px; font-weight: 700; color: var(--muted);
+            text-transform: uppercase; letter-spacing: .1em; margin-right: 4px;
+        }
+        .preset-btn {
+            padding: 4px 8px; border: 1px solid var(--border-solid);
+            background: rgba(255,255,255,0.03); color: var(--dim);
+            font-size: 9px; font-weight: 700; border-radius: 2px;
+            cursor: pointer; transition: all .1s;
+        }
+        .preset-btn:hover { background: rgba(255,255,255,0.08); border-color: var(--dim); color: #fff; }
+        .preset-btn.active { border-color: var(--purple); color: var(--purple); background: var(--purple-bg); }
+        .preset-add { color: var(--green); border-color: rgba(158,206,106,0.2); }
+        .toggle-btn svg { width: 13px; height: 13px; display: block; }
+        .user-menu-item { padding: 9px 14px; font-size: 10px; font-weight: 700;
+                          letter-spacing: .08em; cursor: pointer; }
+        .user-menu-item:hover { background: rgba(255,255,255,0.06); }
+        /* Armed-for-delete state (first right-click) */
+        .lib-row.arm-delete { background: rgba(247,118,142,0.15); }
+        .lib-row.arm-delete .lib-name, .lib-row.arm-delete .lib-dur { color: var(--red); }
+        .preset-btn.arm-delete { border-color: var(--red); color: var(--red); background: rgba(247,118,142,0.1); }
+
+        /* Type Badges */
+        .badge-type {
+            font-family: 'JetBrains Mono', monospace; font-size: 7px; font-weight: 700;
+            padding: 1px 4px; border-radius: 2px; text-transform: uppercase;
+            margin-right: 8px; min-width: 42px; text-align: center;
+        }
+        .badge-type.file   { background: rgba(255,255,255,0.05); color: var(--muted); border: 1px solid rgba(255,255,255,0.1); }
+        .badge-type.stream { background: var(--cyan-bg); color: var(--cyan); border: 1px solid var(--cyan-border); }
+
+        .pl-item-content { display: flex; align-items: center; flex: 1; overflow: hidden; }
+        .pl-actions { display: flex; align-items: center; gap: 8px; opacity: 0; transition: opacity .1s; }
+        .pl-item:hover .pl-actions { opacity: 1; }
+        .pl-action-btn {
+            background: transparent; border: none; color: var(--muted);
+            font-size: 12px; cursor: pointer; padding: 4px; display: flex; align-items: center;
+        }
+        .pl-action-btn:hover { color: var(--red); }
+        .pl-action-btn.move { cursor: ns-resize; }
+        .pl-action-btn.move:hover { color: var(--blue); }
+        .pl-item.dragging { opacity: 0.4; }
+        .pl-item.drag-over-top { border-top: 2px solid var(--cyan); }
+        .pl-item.drag-over-bottom { border-bottom: 2px solid var(--cyan); }
+
+        /* Dropdowns */
+        .mp-add-dropdown {
+            position: relative; display: inline-block;
+        }
+        .mp-dropdown-content {
+            display: none; position: absolute; bottom: 100%; left: 0;
+            background: var(--surface); border: 1px solid var(--border-solid);
+            min-width: 200px; z-index: 100; max-height: 300px; overflow-y: auto;
+            box-shadow: 0 -5px 15px rgba(0,0,0,0.5);
+        }
+        .mp-dropdown-content.show { display: block; }
+        .mp-dropdown-item {
+            padding: 8px 12px; font-size: 11px; color: var(--dim);
+            cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.03);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .mp-dropdown-item:hover { background: rgba(255,255,255,0.05); color: #fff; }
+
+        .mp-pl-bar-right { display: flex; align-items: center; gap: 10px; }
+        .toggle-btn {
+            background: transparent; border: 1px solid var(--border-solid);
+            color: var(--muted); padding: 3px 6px; border-radius: 2px;
+            font-size: 10px; cursor: pointer;
+        }
+        .toggle-btn.active { color: var(--green); border-color: var(--green); background: rgba(158,206,106,0.05); }
+
+        .mp-dropdown-search {
+            padding: 8px; border-bottom: 1px solid var(--border-solid);
+            position: sticky; top: 0; background: var(--surface); z-index: 10;
+        }
+        .mp-search-input {
+            width: 100%; background: #000; border: 1px solid var(--border-solid);
+            color: #fff; padding: 6px 10px; font-size: 11px; border-radius: 2px;
+            outline: none;
+        }
+        .mp-search-input:focus { border-color: var(--cyan); }
+
+        /* Playlist editor toggle (open the queue/library without going on air) */
+        .edit-pl-btn {
+            background: transparent; border: 1px solid var(--border-solid);
+            color: var(--dim); padding: 5px 12px; border-radius: 3px;
+            font-size: 10px; font-weight: 700; letter-spacing: .08em;
+            text-transform: uppercase; cursor: pointer; transition: all .12s;
+        }
+        .edit-pl-btn:hover { border-color: var(--green); color: var(--green); }
+        .edit-pl-btn.active {
+            border-color: var(--green); color: #0b0e14;
+            background: var(--green); box-shadow: 0 0 14px rgba(158,206,106,.35);
+        }
+
+        /* ── Retro Radio Librarian: three-pane column browser ── */
+        .lib-browser { display: none; border-top: 1px solid var(--border-solid); }
+        .lib-browser.open { display: block; }
+        .lib-toolbar {
+            display: flex; align-items: center; gap: 8px;
+            padding: 8px 16px; background: #1f1f33;
+            border-bottom: 1px solid #3a3a52;
+        }
+        .lib-find {
+            flex: 1; background: #000; border: 1px solid #3a3a52;
+            color: #00ff00; padding: 5px 9px; font-size: 11px; border-radius: 2px;
+            outline: none; font-family: 'JetBrains Mono', monospace;
+        }
+        .lib-find:focus { border-color: #00ff00; }
+        .lib-find::placeholder { color: #4a7a4a; }
+        .lib-stat { font-size: 9px; color: #6a6a8a; white-space: nowrap; letter-spacing: .05em; }
+        .lib3 {
+            display: grid; grid-template-columns: 1fr 1fr 1.4fr;
+            height: 280px; background: #27273d;
+            border-bottom: 1px solid #3a3a52;
+        }
+        .lib-pane {
+            overflow-y: auto; border-right: 1px solid #3a3a52;
+            scrollbar-width: thin; scrollbar-color: #3a3a52 transparent;
+        }
+        .lib-pane:last-child { border-right: none; }
+        .lib-pane-head {
+            position: sticky; top: 0; z-index: 2;
+            padding: 5px 10px; font-size: 8px; font-weight: 700;
+            letter-spacing: .14em; text-transform: uppercase; color: #8a8aa8;
+            background: #1f1f33; border-bottom: 1px solid #3a3a52;
+        }
+        .lib-row {
+            display: flex; align-items: center; gap: 8px;
+            padding: 5px 10px; cursor: pointer; font-size: 11px;
+            color: #b0b0c8; border-bottom: 1px solid rgba(255,255,255,.025);
+            white-space: nowrap; overflow: hidden;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .lib-row:hover { background: rgba(0,255,0,.06); color: #d8ffd8; }
+        .lib-row.sel { background: rgba(0,255,0,.12); color: #00ff00; }
+        .lib-row.playing { color: #00ff00; }
+        .lib-row .lib-name { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+        .lib-row .lib-cnt { font-size: 9px; color: #6a6a8a; flex-shrink: 0; }
+        .lib-row.sel .lib-cnt { color: #4a9a4a; }
+        .lib-row .lib-dur { font-size: 9px; color: #6a6a8a; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+        .lib-row .lib-add {
+            opacity: 0; flex-shrink: 0; background: transparent; border: 1px solid #3a3a52;
+            color: #8a8aa8; font-size: 9px; line-height: 1; padding: 2px 5px;
+            border-radius: 2px; cursor: pointer;
+        }
+        .lib-row:hover .lib-add { opacity: 1; }
+        .lib-row .lib-add:hover { border-color: #00ff00; color: #00ff00; }
+        .lib-empty { padding: 14px 10px; font-size: 10px; color: #6a6a8a; text-align: center; }
+        .lib-row .lib-icon { flex-shrink: 0; opacity: .6; font-size: 10px; }
+
+        .updated-at {
+            padding: 8px 20px 12px;
+            font-size: 11px; color: var(--dim);
+            font-family: 'JetBrains Mono', monospace; letter-spacing: .04em;
+            border-top: 1px solid var(--border-solid);
+        }
+
+        /* ── Canvas visualizer ── */
+        #visualizer { width: 100%; height: 100px; background: var(--surface); display: block; }
+        #tap-overlay {
+            position: absolute; inset: 0; z-index: 10;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            gap: 7px;
+            background: rgba(22,22,30,.75); cursor: pointer;
+            transition: opacity .3s;
+        }
+        #tap-overlay.hidden { opacity: 0; pointer-events: none; }
+        .play-circle {
+            width: 48px; height: 48px; border-radius: 50%;
+            border: 2px solid var(--cyan); background: var(--cyan-bg);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 18px; color: var(--cyan);
+            transition: all .15s;
+        }
+        #tap-overlay:hover .play-circle {
+            background: var(--cyan); color: #000;
+            box-shadow: 0 0 20px rgba(125,207,255,.45);
+        }
+        .play-label {
+            font-size: 8px; font-weight: 700; letter-spacing: .16em;
+            text-transform: uppercase; color: var(--muted);
+        }
+        .meter-row {
+            display: flex; border-top: 1px solid var(--border-solid);
+            padding: 8px 14px; gap: 24px;
+        }
+        .meter-item { display: flex; align-items: center; gap: 8px; }
+        .meter-label {
+            font-size: 9px; font-weight: 700; color: var(--dim);
+            text-transform: uppercase; letter-spacing: .1em;
+        }
+        .meter-val { font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+
+        /* ── Boombox source panels ── */
+        .boombox-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            padding: 14px;
+        }
+        .boombox {
+            display: flex; flex-direction: column; align-items: center; gap: 10px;
+            padding: 14px 10px 12px;
+            border: 1px solid var(--border-solid);
+            background: rgba(0,0,0,0.2);
+            border-radius: 4px;
+        }
+        .boombox-title {
+            font-size: 8px; font-weight: 700; letter-spacing: .14em;
+            text-transform: uppercase; color: var(--muted);
+            align-self: stretch; text-align: center;
+        }
+        .src-power {
+            width: 54px; height: 54px;
+            border-radius: 50%;
+            border: 2px solid var(--border-solid);
+            background: rgba(255,255,255,0.02);
+            color: var(--muted);
+            font-size: 22px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+            transition: all .2s;
+            font-family: inherit;
+        }
+        .src-power.off {
+            opacity: 0.35;
+        }
+        .src-power.on {
+            opacity: 1.0;
+        }
+        .src-power.buffering {
+            opacity: 1.0;
+            animation: blink 0.9s infinite;
+        }
+        .src-power.err {
+            opacity: 1.0;
+            color: var(--red);
+            border-color: var(--red);
+            background: rgba(247,118,178,0.15);
+            box-shadow: 0 0 18px rgba(247,118,178,0.4);
+            animation: blink 0.6s infinite;
+        }
+        @keyframes blink {
+            0%,100% { opacity: 1; }
+            50%      { opacity: 0.2; }
+        }
+
+        /* Per-source power button colors */
+        .boombox-automation .src-power.on,
+        .boombox-automation .src-power.buffering {
+            color: var(--purple);
+            border-color: var(--purple);
+            background: var(--purple-bg);
+            box-shadow: 0 0 18px rgba(187,154,247,0.3);
+        }
+        .boombox-live .src-power.on,
+        .boombox-live .src-power.buffering {
+            color: var(--cyan);
+            border-color: var(--cyan);
+            background: var(--cyan-bg);
+            box-shadow: 0 0 18px rgba(125,207,255,0.3);
+        }
+        .boombox-emergency .src-power.on,
+        .boombox-emergency .src-power.buffering {
+            color: var(--red);
+            border-color: var(--red);
+            background: var(--red-bg);
+            box-shadow: 0 0 18px rgba(247,118,178,0.3);
+        }
+
+        .boombox-status {
+            font-size: 8px; font-weight: 700; letter-spacing: .1em;
+            text-transform: uppercase; color: var(--muted);
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .boombox-status.on      { color: var(--green); }
+        .boombox-status.buffering { color: var(--orange); }
+        .boombox-status.err       { color: var(--red); }
+
+        /* Trim fader inside boombox */
+        .boombox-fader-wrap {
+            height: 90px; display: flex; align-items: center; justify-content: center;
+            width: 100%; position: relative;
+        }
+        .boombox-fader-val {
+            font-family: 'JetBrains Mono', monospace; font-size: 9px;
+            color: var(--dim); min-width: 30px; text-align: center;
+        }
+        .boombox-fader-eff {
+            font-family: 'JetBrains Mono', monospace; font-size: 8px;
+            color: rgba(255,255,255,0.2); text-align: center; margin-top: 1px;
+        }
+
+        /* ── Mixer (master only) ── */
+        .mixer-wrap {
+            display: flex; justify-content: center;
+            padding: 14px;
+        }
+        button { font-family: 'Inter', sans-serif; cursor: pointer; transition: all .15s ease; }
+        button:disabled { opacity: .4; cursor: default; }
+
+        .fader-col {
+            display: flex; flex-direction: column; align-items: center; gap: 10px;
+            background: rgba(0,0,0,0.2); padding: 12px 16px; border-radius: 4px;
+            border: 1px solid var(--border-solid); min-width: 80px;
+        }
+        .fader-label {
+            font-size: 8px; font-weight: 700; letter-spacing: .12em;
+            text-transform: uppercase; color: var(--muted);
+            text-align: center; height: 20px;
+        }
+        .fader-input-wrap {
+            height: 120px; display: flex; align-items: center; justify-content: center;
+            width: 100%; position: relative;
+        }
+        .vertical-fader {
+            -webkit-appearance: none;
+            width: 110px; height: 4px;
+            background: rgba(255,255,255,0.05);
+            transform: rotate(-90deg);
+            cursor: pointer;
+            outline: none;
+        }
+        .vertical-fader::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 28px; height: 16px;
+            background: #444; border: 1px solid #666;
+            border-radius: 2px; box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }
+        .fader-val {
+            font-family: 'JetBrains Mono', monospace; font-size: 9px;
+            color: var(--dim); min-width: 30px; text-align: center;
+        }
+        .fader-col.master {
+            background: var(--purple-bg); border-color: var(--purple-border);
+        }
+        .fader-col.master .vertical-fader::-webkit-slider-thumb {
+            background: var(--purple); border-color: #fff;
+        }
+
+        /* ── Footer ── */
+        footer {
+            border-top: 1px solid var(--border-solid);
+            padding: 10px 18px;
+            font-size: 10px; color: var(--dim);
+            font-family: 'JetBrains Mono', monospace; letter-spacing: .06em;
+            display: flex; justify-content: space-between;
+        }
+
+        /* ── Now Playing HUD ── */
+        .hud-body {
+            padding: 18px 20px 14px;
+            display: flex; flex-direction: column; gap: 9px;
+        }
+        .hud-row-source {
+            display: flex; align-items: center; gap: 12px;
+        }
+        .hud-meta {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px; color: var(--dim);
+            min-height: 16px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            padding-left: 2px;
+        }
+        .hud-next {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px; color: var(--muted);
+            min-height: 14px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            padding-left: 2px;
+        }
+        .hud-next-label {
+            font-size: 8px; font-weight: 700; letter-spacing: .1em;
+            text-transform: uppercase; color: var(--muted); opacity: 0.5;
+            margin-right: 6px;
+        }
+        .hud-uptime {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 9px; letter-spacing: .08em;
+            color: var(--muted); padding-left: 2px;
+        }
+        .hud-sys {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 9px; letter-spacing: .08em;
+            color: var(--muted); padding-left: 2px;
+            display: flex; align-items: center; gap: 7px;
+        }
+        .hud-sys-sep { opacity: 0.4; }
+        .hud-sys-item { transition: color .4s ease; }
+        /* Invisible-until-it-matters: neutral normally, amber/red on threshold */
+        .hud-sys-item.warn { color: var(--orange); }
+        .hud-sys-item.crit { color: var(--red); }
+
+        /* ── Server-side VU meter ── */
+        .vu-wrap {
+            padding: 10px 20px 10px;
+            border-top: 1px solid var(--border-solid);
+        }
+        .vu-label-row {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 5px;
+        }
+        .vu-name {
+            font-size: 8px; font-weight: 700; letter-spacing: .14em;
+            text-transform: uppercase; color: var(--muted);
+        }
+        .vu-db-val {
+            font-family: 'JetBrains Mono', monospace; font-size: 11px;
+            color: var(--dim); min-width: 68px; text-align: right;
+        }
+        .vu-rail {
+            height: 10px; background: rgba(255,255,255,0.04);
+            border: 1px solid var(--border-solid);
+            border-radius: 2px; overflow: hidden;
+        }
+        .vu-fill {
+            height: 100%; width: 0%; border-radius: 1px;
+            transition: width 0.12s linear, background 0.15s;
+            background: var(--green);
+        }
+        .vu-ticks {
+            display: flex; justify-content: space-between;
+            margin-top: 3px; padding: 0 1px;
+        }
+        .vu-tick {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 7px; color: var(--muted);
+        }
+
+        /* ── Confidence LEDs ── */
+        .conf-row {
+            display: flex; gap: 18px;
+            padding: 8px 20px 10px;
+            border-top: 1px solid var(--border-solid);
+            align-items: center;
+        }
+        .conf-item {
+            display: flex; align-items: center; gap: 5px;
+            font-size: 8px; font-weight: 700; letter-spacing: .1em;
+            text-transform: uppercase; color: var(--muted);
+        }
+        .conf-led {
+            width: 7px; height: 7px; border-radius: 50%;
+            background: var(--muted); flex-shrink: 0; transition: background .3s;
+        }
+        .conf-led.ok   { background: var(--green);  box-shadow: 0 0 5px rgba(158,206,106,.6); }
+        .conf-led.warn { background: var(--orange);  box-shadow: 0 0 5px rgba(255,158,100,.6); }
+        .conf-led.err  { background: var(--red);     box-shadow: 0 0 5px rgba(247,118,178,.6); }
+        .conf-led.blink { background: var(--red); animation: blink 0.6s infinite; box-shadow: 0 0 8px rgba(247,118,178,.8); }
+
+        /* ── Mobile ── */
+        @media (max-width: 760px) {
+            .page-layout { grid-template-columns: 1fr; }
+            .side-panel { display: none; }
+            .boombox-grid { gap: 6px; padding: 10px 8px; }
+            .boombox { padding: 14px 4px 12px; gap: 9px; }
+
+            /* Emergency mobile = pick a source + confirm TX. No gain-riding:
+               drop the fiddly rotated faders; the power button is the primary action. */
+            .boombox-fader-wrap,
+            .boombox-fader-val,
+            .boombox-fader-eff { display: none; }
+            .src-power { width: 60px; height: 60px; font-size: 24px; }
+
+            /* Master fader → unity readout (see .mixer-readout) */
+            .mixer-wrap { display: none; }
+            .mixer-readout {
+                display: flex; align-items: center; gap: 12px;
+                padding: 16px 18px;
+            }
+
+            /* Surface the rail stream links as a fixed bottom bar (one-thumb reach).
+               env() clears the iOS Safari toolbar / home indicator. */
+            .mobile-quick-links {
+                display: flex;
+                position: fixed; left: 0; right: 0; bottom: 0; z-index: 2000;
+                background: var(--surface);
+                border-top: 1px solid var(--border-solid);
+                padding-bottom: env(safe-area-inset-bottom, 0px);
+            }
+            .mobile-quick-links .side-open-link {
+                flex: 1; border: none; border-radius: 0;
+                padding: 16px 8px; min-height: 56px;
+                display: flex; align-items: center; justify-content: center;
+            }
+            .mobile-quick-links .side-open-link.violet { border-top: 3px solid var(--purple); }
+            .mobile-quick-links .side-open-link.teal   { border-top: 3px solid var(--cyan); border-left: 1px solid var(--border-solid); }
+            /* Keep the last control clear of the fixed bar */
+            main { padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)); }
+        }
+
+        /* ── Crossfade sweep animation ── */
+        #xfade-sweep {
+            position: absolute;
+            top: 0; bottom: 0;
+            width: 3px;
+            background: #7dcfff;
+            box-shadow: 0 0 6px #7dcfff, 0 0 18px #7dcfff, 0 0 40px rgba(125,207,255,0.5);
+            pointer-events: none;
+            display: none;
+        }
+        #xfade-sweep.active {
+            display: block;
+            animation: xfade-scan 3s cubic-bezier(0.45,0,0.55,1) forwards;
+        }
+        @keyframes xfade-scan {
+            0%   { left: -4px; opacity: 1; }
+            85%  { opacity: 1; }
+            100% { left: calc(100% + 4px); opacity: 0; }
+        }
+
+        /* ── Failover (Angry Audio Failsafe A/B) ── */
+        .fo-rail {
+            display: flex; align-items: stretch; gap: 10px;
+            padding: 4px 0 12px;
+        }
+        .fo-chan {
+            flex: 1; position: relative;
+            border: 1px solid var(--border-solid); border-radius: 6px;
+            background: var(--surface); padding: 12px 14px;
+            transition: border-color .3s, background .3s, box-shadow .3s;
+        }
+        .fo-chan .fo-leg { font-family: 'JetBrains Mono', monospace; font-size: 9px;
+            letter-spacing: .14em; color: var(--muted); text-transform: uppercase; }
+        .fo-chan .fo-name { font-size: 15px; font-weight: 700; color: var(--dim); margin-top: 3px; }
+        .fo-chan .fo-sub  { font-size: 10px; color: var(--muted); margin-top: 2px; }
+        .fo-chan .fo-onair {
+            position: absolute; top: 10px; right: 12px;
+            font-family: 'JetBrains Mono', monospace; font-size: 8px; letter-spacing: .12em;
+            color: var(--muted); opacity: 0; transition: opacity .3s; text-transform: uppercase;
+        }
+        /* Channel A live (primary on air) */
+        .fo-chan.live-a {
+            border-color: var(--cyan-border); background: var(--cyan-bg);
+            box-shadow: 0 0 0 1px var(--cyan-border), 0 0 18px -6px var(--cyan);
+        }
+        .fo-chan.live-a .fo-name { color: var(--cyan); }
+        .fo-chan.live-a .fo-onair { opacity: 1; color: var(--cyan); }
+        /* Channel B live (backup on air) */
+        .fo-chan.live-b {
+            border-color: var(--orange); background: rgba(255,158,100,0.10);
+            box-shadow: 0 0 0 1px var(--orange), 0 0 18px -6px var(--orange);
+        }
+        .fo-chan.live-b .fo-name { color: var(--orange); }
+        .fo-chan.live-b .fo-onair { opacity: 1; color: var(--orange); }
+
+        .fo-actions { display: flex; gap: 10px; }
+        .fo-btn {
+            flex: 1; padding: 12px; border-radius: 6px; cursor: pointer;
+            font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 700;
+            letter-spacing: .04em; border: 1px solid var(--border-solid);
+            background: var(--surface); color: var(--dim);
+            transition: filter .15s, opacity .15s; line-height: 1.35;
+        }
+        .fo-btn small { display: block; font-weight: 500; font-size: 10px;
+            color: var(--muted); letter-spacing: .02em; margin-top: 2px; }
+        .fo-btn:hover:not(:disabled) { filter: brightness(1.25); }
+        .fo-btn:disabled { opacity: .4; cursor: not-allowed; }
+        .fo-btn.handoff { border-color: var(--orange); color: var(--orange);
+            background: rgba(255,158,100,0.08); }
+        .fo-btn.takeback { border-color: var(--cyan-border); color: var(--cyan);
+            background: var(--cyan-bg); }
+        .fo-note {
+            font-size: 10px; color: var(--muted); margin-top: 10px; line-height: 1.5;
+        }
+        .fo-banner {
+            display: none; align-items: center; gap: 8px;
+            background: var(--red-bg); border: 1px solid var(--red-border); color: var(--red);
+            border-radius: 4px; padding: 8px 12px; margin-bottom: 10px;
+            font-size: 11px; font-weight: 700; letter-spacing: .03em;
+        }
+        .fo-banner.show { display: flex; }
+        .fo-offline {
+            font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: .1em;
+            color: var(--muted); margin-left: 8px;
+        }
+        .fo-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted);
+            display: inline-block; flex-shrink: 0; }
+        .fo-dot.up   { background: var(--green); box-shadow: 0 0 6px var(--green); }
+        .fo-dot.down { background: var(--red);   box-shadow: 0 0 6px var(--red); }
+        /* ── Automation-loss fallback banner ── */
+        .fallback-banner {
+            margin-top: 6px;
+            padding: 5px 10px;
+            font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
+            color: var(--orange);
+            background: rgba(255,158,100,0.08);
+            border: 1px solid rgba(255,158,100,0.4);
+            border-radius: 4px;
+            animation: fallback-pulse 2s ease-in-out infinite;
+            width: fit-content; max-width: 100%;
+        }
+        @keyframes fallback-pulse { 50% { opacity: 0.6; } }
+
+        /* ── Thermal / fan widget ── */
+        .thermal-widget { display: inline-flex; align-items: center; gap: 4px; }
+        .fan-icon { animation: fan-spin 1.2s linear infinite; flex-shrink: 0; }
+        .fan-icon.stopped { animation: none; }
+        .thermal-widget.warm { color: var(--orange); }
+        .thermal-widget.hot  { color: var(--red); animation: fallback-pulse 1.6s ease-in-out infinite; }
+        .thermal-widget.unknown { color: var(--dim); opacity: 0.6; }
+        @keyframes fan-spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="header-spacer"></div>
+    <div class="header-title">Tower Fallback Control</div>
+    <div class="header-status">
+        <span id="header-user" title="Operator menu"
+              onclick="toggleUserMenu(event)"
+              style="cursor:pointer; opacity:.65; margin-right:14px; font-size:10px; letter-spacing:.08em"></span>
+        <div id="user-menu" style="display:none; position:fixed; top:34px; right:16px; z-index:999;
+             background:#1a1b26; border:1px solid rgba(255,255,255,0.12); border-radius:4px; min-width:130px">
+            <div class="user-menu-item" onclick="changePin()">CHANGE PIN</div>
+            <div class="user-menu-item" onclick="location.href='/logout'" style="color:var(--red)">LOG OUT</div>
+        </div>
+        <div class="header-dot" id="header-dot"></div>
+        <span id="header-src">—</span>
+    </div>
+</header>
+
+<!-- Single-operator lock: shown when another operator holds the tower -->
+<div id="lock-overlay" style="display:none; position:fixed; inset:0; z-index:3000;
+     background:rgba(8,9,14,0.88); backdrop-filter:blur(3px);
+     align-items:center; justify-content:center; padding:20px;">
+    <div style="background:#1a1b26; border:1px solid rgba(247,118,142,0.4); border-radius:8px;
+         padding:30px 28px; max-width:380px; width:100%; text-align:center;
+         box-shadow:0 12px 48px rgba(0,0,0,0.5);">
+        <div style="font-size:11px; letter-spacing:.18em; color:#f7768e; font-weight:700;">● IN USE</div>
+        <div id="lock-msg" style="font-size:15px; color:#fff; margin:16px 0 6px; line-height:1.5;">
+            Someone is currently using this machine.</div>
+        <div id="lock-since" style="font-size:10px; color:#565f89; margin-bottom:22px;"></div>
+        <a id="lock-contact" href="#" style="display:block; padding:11px; margin-bottom:10px;
+           border:1px solid rgba(122,162,247,0.4); border-radius:4px; color:#7aa2f7;
+           text-decoration:none; font-size:12px; font-weight:700; letter-spacing:.08em;">CONTACT</a>
+        <button id="lock-override" type="button" style="display:block; width:100%; padding:11px;
+            border:1px solid rgba(247,118,142,0.45); border-radius:4px; background:rgba(247,118,142,0.1);
+            color:#f7768e; font-family:inherit; font-size:12px; font-weight:700; letter-spacing:.08em;
+            cursor:pointer;">OVERRIDE &amp; ENTER</button>
+        <div style="font-size:9px; color:#565f89; margin-top:16px; line-height:1.6;">
+            Please coordinate before overriding a live session.</div>
+    </div>
+</div>
+
+<!-- Takeover banner: someone overrode you mid-session -->
+<div id="takeover-banner" style="display:none; position:fixed; top:0; left:0; right:0; z-index:2900;
+     background:#f7768e; color:#16161e; text-align:center; padding:9px 14px; font-size:11px;
+     font-weight:700; letter-spacing:.06em;">
+    <span id="takeover-msg"></span>
+    <button type="button" onclick="reclaimControl()" style="margin-left:12px; padding:3px 10px;
+        border:1px solid rgba(22,22,30,0.5); border-radius:3px; background:rgba(22,22,30,0.12);
+        color:#16161e; font-family:inherit; font-weight:700; font-size:10px; cursor:pointer;">
+        TAKE BACK CONTROL</button>
+</div>
+
+<!-- Idle warning: shown in the final 60s before auto-logout -->
+<div id="idle-banner" style="display:none; position:fixed; top:0; left:0; right:0; z-index:2900;
+     background:#e0af68; color:#16161e; text-align:center; padding:9px 14px; font-size:11px;
+     font-weight:700; letter-spacing:.06em;">
+    <span id="idle-msg"></span>
+    <button type="button" onclick="stayActive()" style="margin-left:12px; padding:3px 10px;
+        border:1px solid rgba(22,22,30,0.5); border-radius:3px; background:rgba(22,22,30,0.12);
+        color:#16161e; font-family:inherit; font-weight:700; font-size:10px; cursor:pointer;">
+        STAY SIGNED IN</button>
+</div>
+
+<div class="page-layout">
+
+    <!-- ── LEFT: WGXC (automation stream) ── -->
+    <div class="side-panel left">
+        <div class="side-label">WGXC</div>
+
+        <svg class="lufs-gauge" viewBox="0 0 120 72">
+            <path d="M10,66 A50,50 0 0,1 110,66" fill="none" stroke="#16161e" stroke-width="10" stroke-linecap="round"/>
+            <path d="M10,66 A50,50 0 0,1 110,66" fill="none" stroke="var(--purple)" stroke-width="10" stroke-linecap="round"
+                  stroke-dasharray="157" stroke-dashoffset="157" id="arc-automation"
+                  style="transition:stroke-dashoffset .6s,stroke .4s; filter:drop-shadow(0 0 4px var(--purple))"/>
+            <text x="60" y="57" text-anchor="middle" font-family="JetBrains Mono,monospace"
+                  font-size="15" font-weight="700" fill="white" id="lufs-automation">—</text>
+            <text x="60" y="68" text-anchor="middle" font-family="Inter,sans-serif"
+                  font-size="7" fill="#f776b2">LUFS</text>
+        </svg>
+
+        <a class="side-open-link violet" href="https://audio.wavefarm.org/automation.mp3" target="_blank">▶ Open Stream</a>
+
+        <a class="side-stream-link" href="https://audio.wavefarm.org/automation.mp3" target="_blank">
+            <div class="side-link-dot" id="dot-automation"></div>
+            automation.mp3
+        </a>
+    </div>
+
+    <!-- ── CENTER ── -->
+    <main>
+
+        <!-- Disk Health Warning Banner -->
+        <div id="disk-warning" style="display:none; background:var(--red-bg); border:1px solid var(--red-border); color:var(--red); padding:10px 14px; font-size:11px; font-weight:700; letter-spacing:0.04em; margin-bottom:8px; border-radius:4px;">
+            ⚠ DISK: <span id="disk-warning-text"></span>
+        </div>
+
+        <!-- Now Playing HUD -->
+        <div class="section-head">
+            <div class="section-head-left">
+                <h2>Now Playing</h2>
+                <span class="section-subtitle">analog signal to FM transmitter</span>
+            </div>
+            <div class="section-head-right">
+                <span class="sig-pill tx">TX OUT</span>
+                <span class="badge" id="badge-time">—</span>
+            </div>
+        </div>
+        <div class="section-body">
+            <!-- Source + metadata + uptime -->
+            <div class="hud-body">
+                <div class="hud-row-source">
+                    <span id="status-light" class="status-light"></span>
+                    <div class="source-dot" id="source-dot"></div>
+                    <div class="source-name" id="status">–</div>
+                </div>
+                <!-- Automation-loss fallback banner: Liquidsoap substitutes the
+                     emergency playlist under the automation bus when the upstream
+                     mount is unreachable — invisible to bus state, so it needs
+                     its own indicator (driven by /api/status fallback_active). -->
+                <div class="fallback-banner" id="fallback-banner" style="display:none;">
+                    ⚠ AUTOMATION UNREACHABLE — PLAYING EMERGENCY PLAYLIST
+                </div>
+                <div class="hud-meta" id="hud-meta"></div>
+                <div class="hud-next" id="hud-next"></div>
+                <div class="hud-uptime" id="hud-uptime">UPTIME  —</div>
+                <div class="hud-sys" id="hud-sys">
+                    <span class="hud-sys-item" id="sys-uptime">SYS —</span>
+                    <span class="hud-sys-sep">·</span>
+                    <span class="hud-sys-item" id="sys-mem">MEM —</span>
+                    <span class="hud-sys-sep">·</span>
+                    <span class="hud-sys-item" id="sys-temp">—</span>
+                    <span class="hud-sys-sep">·</span>
+                    <span class="hud-sys-item" id="sys-norm" title="LUFS normalizer (AGC) — current gain correction">NORM —</span>
+                    <span class="hud-sys-sep">·</span>
+                    <span class="hud-sys-item thermal-widget" id="thermal-widget" title="Fan / CPU thermal (mbpfan)">
+                        <svg id="fan-icon" class="fan-icon" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                            <path d="M12 10.2c.4 0 .8.1 1.1.3.6-1 1.4-2.6 1.4-4C14.5 4 13.4 3 12 3s-2.5 1-2.5 3.5c0 1.4.8 3 1.4 4 .3-.2.7-.3 1.1-.3zm1.8 1.4c.2.3.3.7.3 1.1 1.2.1 3 .1 4.2-.6 1.3-.7 1.7-2.1 1-3.3-.7-1.2-2.1-1.5-3.4-.8-1.2.7-2.1 2.2-2.1 3.6zm-3.6 0c0-1.4-.9-2.9-2.1-3.6-1.3-.7-2.7-.4-3.4.8-.7 1.2-.3 2.6 1 3.3 1.2.7 3 .7 4.2.6 0-.4.1-.8.3-1.1zm1.8 2.6c-.4 0-.8-.1-1.1-.3-.6 1-1.4 2.6-1.4 4 0 2.5 1.1 3.5 2.5 3.5s2.5-1 2.5-3.5c0-1.4-.8-3-1.4-4-.3.2-.7.3-1.1.3z"/>
+                            <circle cx="12" cy="12" r="1.6"/>
+                        </svg>
+                        <span id="thermal-text">—</span>
+                    </span>
+                </div>
+            </div>
+            <!-- Server-side VU meter (transmitter output RMS from Liquidsoap) -->
+            <div class="vu-wrap">
+                <div class="vu-label-row">
+                    <span class="vu-name">Output → TX</span>
+                    <span class="vu-db-val" id="vu-db">—</span>
+                </div>
+                <div class="vu-rail">
+                    <div class="vu-fill" id="vu-fill"></div>
+                </div>
+                <div class="vu-ticks">
+                    <span class="vu-tick">-60</span>
+                    <span class="vu-tick">-48</span>
+                    <span class="vu-tick">-36</span>
+                    <span class="vu-tick">-24</span>
+                    <span class="vu-tick" style="color:var(--orange)">-12</span>
+                    <span class="vu-tick" style="color:var(--red)">0</span>
+                </div>
+            </div>
+            <!-- AGC (LUFS normalizer) gain bar; hidden when engine lacks dsp.gain -->
+            <div class="vu-wrap" id="agc-wrap" style="display:none">
+                <div class="vu-label-row">
+                    <span class="vu-name">AGC Gain</span>
+                    <span class="vu-db-val" id="agc-db">—</span>
+                </div>
+                <div class="vu-rail" style="position:relative">
+                    <div class="vu-fill" id="agc-fill" style="position:absolute;top:0;bottom:0"></div>
+                </div>
+                <div class="vu-ticks">
+                    <span class="vu-tick">-15</span>
+                    <span class="vu-tick">0</span>
+                    <span class="vu-tick">+15</span>
+                    <span class="vu-tick" style="color:var(--orange)">+30</span>
+                </div>
+            </div>
+            <!-- Confidence LEDs -->
+            <div class="conf-row">
+                <div class="conf-item"><div class="conf-led" id="led-alsa"></div>ALSA</div>
+                <div class="conf-item"><div class="conf-led" id="led-upstream"></div>UPSTREAM</div>
+                <div class="conf-item"><div class="conf-led" id="led-silence"></div>SILENCE</div>
+                <div class="conf-item"><div class="conf-led" id="led-disk"></div>DISK</div>
+            </div>
+            <div class="updated-at" id="updated-at-detail">Connecting…</div>
+        </div>
+
+        <!-- Failover — Angry Audio Failsafe A/B (primary ↔ backup) -->
+        <div class="section-head">
+            <div class="section-head-left">
+                <h2>FAILOVER SWITCH</h2>
+                <span class="section-subtitle">Angry Audio Failsafe · A ↔ B</span>
+            </div>
+            <div class="section-head-right">
+                <span class="fo-dot" id="fo-board-dot" title="Relay watchdog"></span>
+                <span class="fo-offline" id="fo-board-txt">—</span>
+            </div>
+        </div>
+        <div class="section-body">
+            <div class="fo-banner" id="fo-banner">
+                <span class="fo-dot down"></span>
+                <span>ON BACKUP — Primary (A) is silenced. Broadcast is riding TOWER-TWO.</span>
+            </div>
+            <div class="fo-rail">
+                <div class="fo-chan" id="fo-chan-a">
+                    <span class="fo-onair">● ON AIR</span>
+                    <div class="fo-leg">Channel A · Primary</div>
+                    <div class="fo-name">TOWER ONE</div>
+                </div>
+                <div class="fo-chan" id="fo-chan-b">
+                    <span class="fo-onair">● ON AIR</span>
+                    <div class="fo-leg">Channel B · Backup</div>
+                    <div class="fo-name">TOWER-TWO</div>
+                </div>
+            </div>
+            <div class="fo-actions">
+                <button class="fo-btn handoff" id="fo-handoff" onclick="failsafeHandoff()">
+                    SWITCH TO BACKUP ▸
+                    <small>cut to TOWER-TWO</small>
+                </button>
+                <button class="fo-btn takeback" id="fo-takeback" onclick="failsafeTakeback()">
+                    ◂ BACK TO PRIMARY
+                    <small>restore A</small>
+                </button>
+            </div>
+            <div class="fo-note" id="fo-note"></div>
+        </div>
+
+        <!-- Source control — boombox panels -->
+        <div class="section-head">
+            <div class="section-head-left">
+                <h2>Source Control</h2>
+            </div>
+            <div class="section-head-right">
+                <button class="edit-pl-btn" id="btn-edit-playlist" onclick="togglePlaylistEditor()"
+                        title="Open the playlist editor without going on air">&#9998; Edit Playlist</button>
+            </div>
+        </div>
+        <div class="section-body">
+            <div class="boombox-grid">
+
+                <!-- AUTOMATION -->
+                <div class="boombox boombox-automation">
+                    <span class="boombox-title">WGXC</span>
+                    <button class="src-power off" id="power-automation" onclick="toggleBus('automation')">⏻</button>
+                    <span class="boombox-status off" id="boombox-status-automation">OFF</span>
+                    <div class="boombox-fader-wrap">
+                        <input type="range" class="vertical-fader" id="trim-automation"
+                               min="0" max="1.5" step="0.01" value="1.0"
+                               oninput="setTrim('automation', this.value)">
+                    </div>
+                    <span class="boombox-fader-val" id="trim-val-automation">0 dB</span>
+                    <span class="boombox-fader-eff" id="trim-eff-automation">eff 0 dB</span>
+                </div>
+
+                <!-- STREAM SELECTOR -->
+                <div class="boombox boombox-live">
+                    <span class="boombox-title">Stream Selector</span>
+                    <button class="src-power off" id="power-live" onclick="toggleBus('live')">⏻</button>
+                    <span class="boombox-status off" id="boombox-status-live">OFF</span>
+                    <div class="boombox-fader-wrap">
+                        <input type="range" class="vertical-fader" id="trim-live"
+                               min="0" max="1.5" step="0.01" value="1.0"
+                               oninput="setTrim('live', this.value)">
+                    </div>
+                    <span class="boombox-fader-val" id="trim-val-live">0 dB</span>
+                    <span class="boombox-fader-eff" id="trim-eff-live">eff 0 dB</span>
+                </div>
+
+                <!-- LOCAL AUDIO -->
+                <div class="boombox boombox-emergency">
+                    <span class="boombox-title">Local Audio</span>
+                    <button class="src-power off" id="power-emergency" onclick="toggleBus('emergency')">⏻</button>
+                    <span class="boombox-status off" id="boombox-status-emergency">OFF</span>
+                    <div class="boombox-fader-wrap">
+                        <input type="range" class="vertical-fader" id="trim-emergency"
+                               min="0" max="1.5" step="0.01" value="1.0"
+                               oninput="setTrim('emergency', this.value)">
+                    </div>
+                    <span class="boombox-fader-val" id="trim-val-emergency">0 dB</span>
+                    <span class="boombox-fader-eff" id="trim-eff-emergency">eff 0 dB</span>
+                </div>
+
+            </div>
+
+            <!-- Crossfade Bar (shown when two sources are active) -->
+            <div id="crossfade-bar" style="display:none; position:relative; overflow:hidden; align-items:center; justify-content:center; gap:12px; padding:10px 14px; border-top:1px solid var(--border-solid); background:rgba(125,207,255,0.04);">
+                <div id="xfade-sweep"></div>
+                <span id="xfade-label" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--cyan); letter-spacing:.06em;"></span>
+                <button id="xfade-btn" onclick="doCrossfade()"
+                    style="background:var(--cyan-bg); border:1px solid var(--cyan-border); color:var(--cyan);
+                           padding:6px 18px; font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:700;
+                           letter-spacing:.12em; text-transform:uppercase; cursor:pointer; border-radius:3px;
+                           transition:all .15s;">
+                    ⇌ CROSSFADE
+                </button>
+            </div>
+
+            <!-- Stream Selector Panel (shown only when live bus is on) -->
+            <div id="stream-selector-panel" class="stream-selector-panel" style="border-top:1px solid var(--border-solid); padding:10px 14px;">
+                <div style="font-size:8px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); margin-bottom:8px;">Stream Selector → Live Source</div>
+                <div id="stream-selector-list" style="display:flex; flex-wrap:wrap; gap:6px;">
+                    <span style="font-size:10px; color:var(--muted); opacity:0.5;">Loading…</span>
+                </div>
+            </div>
+
+            <!-- Local Audio Player (shown when emergency bus is on) -->
+            <div class="emergency-browser" id="emergency-browser">
+
+                <!-- Presets -->
+                <div class="mp-presets" id="mp-presets">
+                    <span class="preset-label">Presets</span>
+                    <!-- populated by JS -->
+                    <button class="preset-btn preset-add" onclick="saveCurrentPlaylist()">+ Save</button>
+                </div>
+
+                <!-- LCD display -->
+                <div class="mp-display">
+                    <div class="mp-row1">
+                        <span class="mp-tracknum" id="mp-tracknum">— / —</span>
+                        <div class="mp-title-clip">
+                            <span class="mp-title" id="mp-title">NO TRACK LOADED</span>
+                        </div>
+                        <span class="mp-time" id="mp-time">0:00 / 0:00</span>
+                    </div>
+                    <div class="mp-progress-rail">
+                        <div class="mp-progress-fill" id="mp-progress"></div>
+                    </div>
+                </div>
+
+                <!-- Controls -->
+                <div class="mp-controls">
+                    <button class="p-btn" onclick="playerPrev()" title="Prev">⏮</button>
+                    <button class="p-btn p-play" id="mp-btn-play" onclick="playerPlay()" title="Play">▶</button>
+                    <button class="p-btn p-stop" onclick="playerStop()" title="Stop Broadcast">■</button>
+                    <button class="p-btn" onclick="playerNext()" title="Next">⏭</button>
+                </div>
+
+                <!-- Playlist toolbar -->
+                <div class="mp-pl-bar">
+                    <span class="mp-pl-label">Queue &nbsp;<span id="mp-count" style="opacity:.5">0 items</span></span>
+                    
+                    <div class="mp-pl-bar-right">
+                        <button class="mp-pl-btn" id="lib-toggle" onclick="toggleLibBrowser()">&#128218; Browse</button>
+                        <button class="mp-pl-btn" id="upl-btn" onclick="document.getElementById('upl-input').click()" title="Upload audio files to the library (mp3/wav/ogg/flac)">&#11014; Upload</button>
+                        <input type="file" id="upl-input" accept=".mp3,.wav,.ogg,.flac" multiple style="display:none" onchange="uploadFiles(this.files)">
+                        <button class="mp-pl-btn" onclick="addStreamPrompt()">+ Stream</button>
+                        
+                        <div style="width:1px; height:14px; background:var(--border-solid); margin:0 4px"></div>
+                        
+                        <button class="toggle-btn" id="btn-shuffle" onclick="toggleShuffle()" title="Shuffle: off (plays queue in order)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg></button>
+                        <button class="toggle-btn" id="btn-loop" onclick="toggleLoop()" title="Loop: off (queue plays once, then stops)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></button>
+                        <button class="mp-pl-btn" onclick="clearQueue()" title="Clear Queue" style="color:var(--red)">✕</button>
+                    </div>
+                </div>
+
+                <!-- Retro Radio Librarian — three-pane column browser -->
+                <div class="lib-browser" id="lib-browser">
+                    <div class="lib-toolbar">
+                        <input type="text" class="lib-find" id="lib-find" placeholder="Filter artists, albums, tracks…" oninput="libFilter(this.value)">
+                        <span class="lib-stat" id="lib-stat">—</span>
+                    </div>
+                    <div class="lib3">
+                        <div class="lib-pane" id="lib-artists">
+                            <div class="lib-pane-head" id="lib-artists-head">Artists</div>
+                            <div class="lib-empty">Loading…</div>
+                        </div>
+                        <div class="lib-pane" id="lib-albums">
+                            <div class="lib-pane-head">Albums</div>
+                            <div class="lib-empty">Select an artist</div>
+                        </div>
+                        <div class="lib-pane" id="lib-tracks">
+                            <div class="lib-pane-head">Tracks</div>
+                            <div class="lib-empty">Select an album</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Playlist -->
+                <div class="mp-playlist" id="mp-playlist">
+                    <div class="pl-item" style="color:var(--muted);cursor:default;justify-content:center">
+                        Queue is empty
+                    </div>
+                </div>
+
+                <!-- Play Log -->
+                <div class="mp-pl-bar" style="border-top:1px solid var(--border-solid)">
+                    <span class="mp-pl-label">Log &nbsp;<span style="opacity:.5">Last 10 tracks</span></span>
+                </div>
+                <div id="mp-log" style="max-height:100px; overflow-y:auto; font-family:'JetBrains Mono', monospace; font-size:10px; padding:8px 16px; color:var(--dim); background:rgba(0,0,0,0.1)">
+                    <div style="opacity:0.3">No log entries yet</div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Mixer — master only -->
+        <div class="section-head">
+            <h2>Mixer</h2>
+        </div>
+        <div class="section-body">
+            <div class="mixer-wrap">
+                <div class="fader-col master">
+                    <span class="fader-label">Master</span>
+                    <div class="fader-input-wrap">
+                        <input type="range" class="vertical-fader" id="vol-slider"
+                               min="0" max="1.5" step="0.01" value="1.0" oninput="setVolume(this.value)">
+                    </div>
+                    <span class="fader-val" id="vol-val">0 dB</span>
+                </div>
+            </div>
+            <!-- Mobile: master shown as a unity readout, not a draggable slider -->
+            <div class="mixer-readout">
+                <span class="mixer-readout-label">Master</span>
+                <span class="mixer-readout-val" id="vol-val-mobile">0 dB</span>
+                <button class="mixer-readout-reset" onclick="setVolume(1.0)">Reset to 0&nbsp;dB</button>
+            </div>
+        </div>
+
+        <!-- pre-transmitter monitor (browser waveform) — demoted to bottom -->
+        <audio id="player" crossorigin="anonymous" style="display:none">
+            Your browser does not support audio.
+        </audio>
+        <div class="section-head">
+            <div class="section-head-left">
+                <h2>pre-transmitter monitor</h2>
+                <span class="section-subtitle">Liquidsoap output before the TX · ~5s delay</span>
+            </div>
+            <div class="section-head-right">
+                <span class="sig-pill browser">BROWSER</span>
+                <span class="badge" id="fps-counter">—</span>
+            </div>
+        </div>
+        <div class="section-body">
+            <div style="position:relative">
+                <canvas id="visualizer"></canvas>
+                <div id="tap-overlay">
+                    <div class="play-circle">▶</div>
+                    <span class="play-label">Play monitor</span>
+                </div>
+            </div>
+            <div class="meter-row">
+                <div class="meter-item">
+                    <span class="meter-label">Peak</span>
+                    <span class="meter-val" id="peak-val" style="color:var(--green)">−inf</span>
+                </div>
+                <div class="meter-item">
+                    <span class="meter-label">RMS</span>
+                    <span class="meter-val" id="rms-val" style="color:var(--cyan)">−inf</span>
+                </div>
+                <span style="margin-left:auto;font-size:0.68rem;color:#f472b6;opacity:0.85;white-space:nowrap;">ideal monitor: radio tuned to 90.7</span>
+            </div>
+        </div>
+
+        <!-- Mobile-only: surfaces the rail "Open Stream" links (rails are hidden
+             on narrow screens). Fixed to the bottom for one-thumb reach. -->
+        <nav class="mobile-quick-links">
+            <a class="side-open-link violet" href="https://audio.wavefarm.org/automation.mp3" target="_blank">▶ WGXC</a>
+            <a class="side-open-link teal"   href="https://audio.wavefarm.org/fmmonitor.mp3" target="_blank">▶ FM Monitor</a>
+        </nav>
+
+    </main>
+
+    <!-- ── RIGHT: FM Monitor ── -->
+    <div class="side-panel right">
+        <div class="side-label">FM Monitor</div>
+
+        <svg class="lufs-gauge" viewBox="0 0 120 72">
+            <path d="M10,66 A50,50 0 0,1 110,66" fill="none" stroke="#16161e" stroke-width="10" stroke-linecap="round"/>
+            <path d="M10,66 A50,50 0 0,1 110,66" fill="none" stroke="var(--cyan)" stroke-width="10" stroke-linecap="round"
+                  stroke-dasharray="157" stroke-dashoffset="157" id="arc-fmmonitor"
+                  style="transition:stroke-dashoffset .6s,stroke .4s; filter:drop-shadow(0 0 4px var(--cyan))"/>
+            <text x="60" y="57" text-anchor="middle" font-family="JetBrains Mono,monospace"
+                  font-size="15" font-weight="700" fill="white" id="lufs-fmmonitor">—</text>
+            <text x="60" y="68" text-anchor="middle" font-family="Inter,sans-serif"
+                  font-size="7" fill="#f776b2">LUFS</text>
+        </svg>
+
+        <a class="side-open-link teal" href="https://audio.wavefarm.org/fmmonitor.mp3" target="_blank">▶ Open Stream</a>
+
+        <a class="side-stream-link" href="https://audio.wavefarm.org/fmmonitor.mp3" target="_blank">
+            <div class="side-link-dot" id="dot-fmmonitor"></div>
+            fmmonitor.mp3
+        </a>
+    </div>
+
+</div><!-- end .page-layout -->
+
+<footer>
+    <span>wgxc-tower-fallback</span>
+    <span>tower-two</span>
+</footer>
+
+<script>
+    // ── Session guard: any 401 from the API means the cookie expired — go log in ──
+    const _rawFetch = window.fetch.bind(window);
+    window.fetch = async (...args) => {
+        const r = await _rawFetch(...args);
+        if (r.status === 401) location.href = '/login';
+        return r;
+    };
+
+    // ── Bus state cache (updated by updateStatus) ──
+    const _bus = { automation: 0.0, live: 0.0, emergency: 0.0 };
+
+    let _playlistLoaded = false;
+
+    // ── Uptime tracking ──
+    let _prevSource = '';
+    let _sourceStartTime = Date.now();
+
+    // ── Server-side silence tracking ──
+    let _serverSilenceStart = null;
+
+    function tickUptime() {
+        if (!_prevSource) return;
+        const elapsed = Math.floor((Date.now() - _sourceStartTime) / 1000);
+        const h = Math.floor(elapsed / 3600);
+        const m = Math.floor((elapsed % 3600) / 60);
+        const s = elapsed % 60;
+        const str = (h ? `${h}:` : '') +
+                    `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+        const el = document.getElementById('hud-uptime');
+        if (el) el.textContent = `UPTIME  ${str}`;
+    }
+    setInterval(tickUptime, 1000);
+
+    // The player/queue panel stays visible whenever the emergency bus wants it
+    // OR the operator has opened the editor. This lets you build playlists while
+    // Automation/Stream is on air — queuing only edits the engine, nothing goes
+    // to the transmitter until the emergency bus is raised.
+    let _playlistEditOpen = false;
+
+    function showEmergencyBrowser(on) {
+        const browser = document.getElementById('emergency-browser');
+        const visible = on || _playlistEditOpen;
+        if (visible) {
+            browser.classList.add('visible');
+            if (!_playlistLoaded) { _playlistLoaded = true; initQueue(); }
+        } else {
+            browser.classList.remove('visible');
+            _playlistLoaded = false;
+        }
+    }
+
+    function togglePlaylistEditor() {
+        _playlistEditOpen = !_playlistEditOpen;
+        document.getElementById('btn-edit-playlist').classList.toggle('active', _playlistEditOpen);
+        // Recompute visibility from current bus state (panel stays if bus is on).
+        showEmergencyBrowser(_bus.emergency > 0.5 || _cued.has('emergency'));
+        // Editing means picking tracks — open the librarian with the panel and
+        // bring it into view (the panel can sit below the fold).
+        const lib = document.getElementById('lib-browser');
+        if (lib.classList.contains('open') !== _playlistEditOpen) toggleLibBrowser();
+        if (_playlistEditOpen) {
+            setTimeout(() => document.getElementById('emergency-browser')
+                .scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 100);
+        }
+    }
+
+    function showStreamSelector(on) {
+        const panel = document.getElementById('stream-selector-panel');
+        if (!panel) return;
+        if (on) {
+            panel.classList.add('visible');
+            refreshStreamSelector();
+        } else {
+            panel.classList.remove('visible');
+        }
+    }
+
+    // _cued tracks sources that are ON (loaded) but at bus=0 — ready for crossfade
+    // Separate from _bus because bus=0.0 is indistinguishable from "off" otherwise
+    const _cued = new Set();
+    const _cuedAt = {};  // src → timestamp when cued (for BUFFERING timeout detection)
+    const _cueErrors = new Set(); // sources that timed out while cued
+    // Latest per-source readiness from the poll. A stream isn't crossfade-able
+    // until it's ready (buffered/connected) — fading onto a half-cued stream
+    // strands the live source silent.
+    const _ready = { automation: true, live: true, emergency: true };
+    // True once a stream URL is picked in the Stream Selector (synced from the
+    // poll's stream_label) — before that, a cued live source is waiting on the
+    // operator, not buffering.
+    let _streamSelected = false;
+    const CUE_TIMEOUT_MS = 45000; // 45s grace before declaring a cued source failed (clock starts at pick, not cue)
+    let _fading = false; // true during active crossfade — suppresses poll bus overwrites
+    let _fadeFrom = null, _fadeTo = null; // sources owned by the fade animation while _fading
+
+    // ── Boombox power button state ──
+    function setBoomboxState(src, busLevel, isReady, label) {
+        const btn    = document.getElementById(`power-${src}`);
+        const status = document.getElementById(`boombox-status-${src}`);
+        if (!btn || !status) return;
+
+        const isCued      = _cued.has(src);
+        const isLive      = busLevel > 0.5;
+        const isOn        = isLive || isCued;
+        // Unified readiness model for every source: while CUED, "ready" means
+        // fade-ready (cueReadyFor); while LIVE it means producing audio (isReady).
+        // So a cued source reads LOADING… until ready, then CUED, then you can
+        // crossfade. Streams buffer; Local Audio is ready once a track is picked.
+        const cueReady    = isCued ? cueReadyFor(src) : isReady;
+        const isBuffering = isOn && !cueReady; // buffering applies to cued sources too
+
+        // A cued source that's waiting for the operator to pick something isn't
+        // loading — no failure timeout, and keep resetting the clock so the 20s
+        // grace starts from the moment a pick is actually made.
+        const awaitingPick = isCued && !cueReady &&
+            (src === 'emergency' || (src === 'live' && !_streamSelected));
+        if (awaitingPick && _cuedAt[src]) _cuedAt[src] = Date.now();
+
+        // Detect cue timeout — source never became fade-ready within CUE_TIMEOUT_MS
+        if (isCued && !cueReady && !awaitingPick && _cuedAt[src] && (Date.now() - _cuedAt[src] > CUE_TIMEOUT_MS)) {
+            _cueErrors.add(src);
+        } else if (cueReady) {
+            _cueErrors.delete(src);
+        }
+        const isError = _cueErrors.has(src);
+
+        btn.className = 'src-power ' + (isError ? 'err' : isBuffering ? 'buffering' : isOn ? 'on' : 'off');
+        if (isError) {
+            status.textContent = 'ERR — RETRY?';
+            status.className   = 'boombox-status err';
+        } else if (isBuffering) {
+            if (awaitingPick) {
+                status.textContent = src === 'emergency' ? 'SELECT A TRACK' : 'SELECT A STREAM';
+            } else {
+                status.textContent = isCued ? 'LOADING…' : 'BUFFERING';
+            }
+            status.className   = 'boombox-status buffering';
+        } else if (isCued) {
+            status.textContent = 'CUED';
+            status.className   = 'boombox-status buffering'; // orange
+        } else if (isLive) {
+            status.textContent = label || 'ON';
+            status.className   = 'boombox-status on';
+        } else {
+            status.textContent = 'OFF';
+            status.className   = 'boombox-status off';
+        }
+    }
+
+    // ── Toggle bus on/off ──
+    // True if any source OTHER than `src` is currently on air or cued. The mixer
+    // sums all buses, so only one source may be at ~1.0 at a time (except mid-
+    // crossfade) — activating a source while this is true must CUE it, not play it.
+    function anotherSourceActive(src) {
+        return Object.entries(_bus).some(([s, v]) => s !== src && (v > 0.01 || _cued.has(s)));
+    }
+
+    async function toggleBus(src) {
+        const isCurrentlyOn = _bus[src] > 0.01 || _cued.has(src);
+
+        if (isCurrentlyOn) {
+            // Turn OFF completely
+            _bus[src] = 0.0;
+            _cued.delete(src);
+            delete _cuedAt[src];
+            _cueErrors.delete(src);
+            setBoomboxState(src, 0.0, true);
+            if (src === 'emergency') showEmergencyBrowser(false);
+            if (src === 'live') showStreamSelector(false);
+            await fetch('/api/bus', {
+                method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({source: src, level: 0.0})
+            });
+        } else {
+            // Turning ON — check if another source is already live or cued
+            const anotherActive = anotherSourceActive(src);
+
+            if (anotherActive) {
+                // Load silently — cued for crossfade
+                _bus[src] = 0.0;
+                _cued.add(src);
+                _cuedAt[src] = Date.now();
+                _cueErrors.delete(src);
+                setBoomboxState(src, 0.0, true);
+                if (src === 'emergency') showEmergencyBrowser(true);
+                if (src === 'live') showStreamSelector(true);
+                // Don't send bus update — server stays at 0, no audio change
+            } else {
+                // No other source active — go live immediately
+                _bus[src] = 1.0;
+                _cued.delete(src);
+                setBoomboxState(src, 1.0, true);
+                if (src === 'emergency') showEmergencyBrowser(true);
+                if (src === 'live') showStreamSelector(true);
+                fetch('/api/switch', {
+                    method: 'POST', headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({source: src})
+                });
+                await fetch('/api/bus', {
+                    method: 'POST', headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({source: src, level: 1.0})
+                });
+            }
+        }
+
+        updateCrossfadeButton();
+    }
+
+    // Is a source fade-ready (CUED, can produce audio the instant we fade to it)?
+    //   live       — input.http must be buffered/connected (_ready.live)
+    //   emergency  — local-file queue is ready once a track is selected; the
+    //                server primes playback at fade time
+    //   automation — the always-on default
+    function cueReadyFor(src) {
+        if (!src) return false;
+        if (src === 'live')      return _ready.live === true;
+        if (src === 'emergency') return _queueState.tracks.length > 0 &&
+                                        _queueState.current_index >= 0;
+        return _ready[src] !== false; // automation
+    }
+
+    // Enable/disable the crossfade button based on incoming-source readiness.
+    function setCrossfadeReady(ready) {
+        const btn = document.getElementById('xfade-btn');
+        if (!btn || _fading) return; // doCrossfade owns the button during a fade
+        btn.disabled = !ready;
+        btn.style.opacity = ready ? '' : '0.45';
+        btn.style.cursor  = ready ? 'pointer' : 'not-allowed';
+        btn.textContent   = ready ? '⇌ CROSSFADE' : '⇌ CUEING…';
+    }
+
+    // ── Crossfade button visibility ──
+    function updateCrossfadeButton() {
+        const bar   = document.getElementById('crossfade-bar');
+        const label = document.getElementById('xfade-label');
+        if (!bar) return;
+
+        // Outgoing = live (bus > 0.5), Incoming = cued (in _cued set, bus = 0)
+        const outgoing = Object.entries(_bus).filter(([, v]) => v > 0.5).map(([s]) => s);
+        const incoming = [..._cued];
+
+        if (outgoing.length >= 1 && incoming.length >= 1) {
+            label.textContent = `${sourceLabel(outgoing[0])} → ${sourceLabel(incoming[0])}`;
+            bar.style.display = 'flex';
+            // Don't allow the fade until the incoming source has finished cueing —
+            // crossfading onto a half-buffered stream strands it silent.
+            setCrossfadeReady(cueReadyFor(incoming[0]));
+        } else if (outgoing.length >= 2) {
+            // Mid-fade both at partial level
+            label.textContent = outgoing.map(sourceLabel).join(' ⇌ ');
+            bar.style.display = 'flex';
+        } else {
+            bar.style.display = 'none';
+        }
+    }
+
+    // ── Crossfade execution — server-side ──
+    // The browser only *triggers* the fade and animates while polling; the bus
+    // ramp itself runs in Flask. Refreshing or closing the tab mid-fade can no
+    // longer strand buses at partial levels.
+    async function doCrossfade() {
+        const outgoing = Object.entries(_bus).filter(([, v]) => v > 0.5).map(([s]) => s);
+        const incoming = [..._cued];
+        if (!outgoing.length || !incoming.length) return;
+
+        const fromSrc = outgoing[0];
+        const toSrc   = incoming[0];
+        // Guard: never fade onto a source that hasn't finished cueing.
+        if (!cueReadyFor(toSrc)) { setCrossfadeReady(false); return; }
+        const btn   = document.getElementById('xfade-btn');
+        const sweep = document.getElementById('xfade-sweep');
+        btn.disabled = true;
+        btn.textContent = '⇌ FADING…';
+        _fading = true;
+        _fadeFrom = fromSrc;
+        _fadeTo = toSrc;
+
+        // Take ownership of the two power buttons: steady classes, smooth
+        // opacity ramp — no blink animation, no poll contention.
+        const fromBtn = document.getElementById(`power-${fromSrc}`);
+        const toBtn   = document.getElementById(`power-${toSrc}`);
+        const fromSt  = document.getElementById(`boombox-status-${fromSrc}`);
+        const toSt    = document.getElementById(`boombox-status-${toSrc}`);
+        if (fromBtn) fromBtn.className = 'src-power on';
+        if (toBtn)   toBtn.className = 'src-power on';
+        if (fromSt)  { fromSt.textContent = 'FADE OUT'; fromSt.className = 'boombox-status off'; }
+        if (toSt)    { toSt.textContent = 'FADE IN';    toSt.className = 'boombox-status on'; }
+
+        // Kick the sweep animation (force reflow so re-triggering works)
+        if (sweep) {
+            sweep.classList.remove('active');
+            void sweep.offsetWidth; // reflow
+            sweep.classList.add('active');
+        }
+
+        try {
+            const r = await fetch('/api/crossfade', {
+                method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({from: fromSrc, to: toSrc})
+            });
+            const j = await r.json();
+            if (!r.ok || j.error) throw new Error(j.error || 'crossfade rejected');
+
+            // Glow ramp while the server runs the real bus fade: outgoing dims
+            // 1.0 → 0.35, incoming brightens 0.35 → 1.0 (matches on/off opacities)
+            const t0 = Date.now();
+            const durMs = (j.duration || 3.0) * 1000;
+            while (true) {
+                await new Promise(res => setTimeout(res, 200));
+                const ease = 0.5 - 0.5 * Math.cos(Math.PI * Math.min(1, (Date.now() - t0) / durMs));
+                if (fromBtn) fromBtn.style.opacity = (1.0 - 0.65 * ease).toFixed(2);
+                if (toBtn)   toBtn.style.opacity   = (0.35 + 0.65 * ease).toFixed(2);
+                if (Date.now() - t0 > durMs) {
+                    const st = await fetch('/api/crossfade/state').then(x => x.json());
+                    if (!st.active) break;
+                }
+            }
+
+            _bus[fromSrc] = 0.0;
+            _bus[toSrc]   = 1.0;
+            _cued.delete(fromSrc);
+            _cued.delete(toSrc);
+            delete _cuedAt[fromSrc];
+            delete _cuedAt[toSrc];
+            _cueErrors.delete(fromSrc);
+            _cueErrors.delete(toSrc);
+            setBoomboxState(fromSrc, 0.0, true);
+            setBoomboxState(toSrc,   1.0, true);
+            if (fromSrc === 'emergency') showEmergencyBrowser(false);
+            if (fromSrc === 'live') showStreamSelector(false);
+        } catch (e) {
+            console.error('crossfade failed', e);
+        } finally {
+            if (fromBtn) fromBtn.style.opacity = '';
+            if (toBtn)   toBtn.style.opacity = '';
+            _fading = false;
+            _fadeFrom = null;
+            _fadeTo = null;
+            btn.disabled = false;
+            btn.textContent = '⇌ CROSSFADE';
+            if (sweep) sweep.classList.remove('active');
+            updateCrossfadeButton();
+        }
+    }
+
+    // ── dB formatting helper ──
+    function fmtDb(v) {
+        if (v <= 0) return '−inf dB';
+        const db = 20 * Math.log10(v);
+        if (Math.abs(db) < 0.05) return '0 dB';
+        return (db > 0 ? '+' : '') + db.toFixed(1) + ' dB';
+    }
+
+    // Track master volume for effective level display
+    let _masterVol = 1.0;
+
+    function updateEffective(src, trim) {
+        const el = document.getElementById(`trim-eff-${src}`);
+        if (el) el.textContent = 'eff ' + fmtDb(trim * _masterVol);
+    }
+
+    // ── Set trim (level fader) ──
+    async function setTrim(src, val) {
+        const v = parseFloat(val);
+        document.getElementById(`trim-val-${src}`).textContent = fmtDb(v);
+        updateEffective(src, v);
+        await fetch('/api/gain', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({source: src, level: v})
+        });
+    }
+
+    // ── Unified Music Player (Queue) ──
+    let _queueState = {
+        tracks: [],
+        current_index: -1,
+        mode: 'sequential',
+        state: 'stopped',
+        started_at: null,
+        server_time: 0
+    };
+
+    function cleanTitle(filename) {
+        if (!filename) return 'UNKNOWN';
+        return filename
+            .replace(/\.[^/.]+$/, '')
+            .replace(/^\d+[\s._\-]+/, '')
+            .trim() || filename;
+    }
+    function fmtTime(s) {
+        if (!s || isNaN(s)) return '0:00';
+        return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
+    }
+
+    // Load presets and initial queue on start
+    async function initQueue() {
+        await loadPresets();
+        await refreshQueue();
+    }
+
+    let _lastQueueHash = '';
+    let _serverSkew = 0;
+    let _dragIdx = -1;
+
+    async function refreshQueue() {
+        try {
+            const data = await fetch('/api/queue').then(r => r.json());
+            
+            // Calculate clock skew (client - server)
+            _serverSkew = (Date.now() / 1000) - data.server_time;
+
+            // Simple hash to detect changes (tracks and current_index and mode and state)
+            const currentHash = JSON.stringify({
+                ids: data.tracks.map(t => t.id),
+                idx: data.current_index,
+                mode: data.mode,
+                state: data.state
+            });
+
+            if (currentHash !== _lastQueueHash) {
+                // If the user is mid-drag, defer the re-render until drag completes
+                // (otherwise the DOM gets rebuilt mid-drag and the gesture breaks)
+                if (_dragIdx !== -1) {
+                    _queueState.started_at = data.started_at;
+                    _queueState.server_time = data.server_time;
+                    return;
+                }
+                _queueState = data;
+                _lastQueueHash = currentHash;
+                renderQueue();
+            } else {
+                // Just update started_at and other metadata without full re-render
+                _queueState.started_at = data.started_at;
+                _queueState.server_time = data.server_time;
+                updateDisplay();
+            }
+        } catch(e) { console.error("Error refreshing queue", e); }
+    }
+
+    async function loadPresets() {
+        const el = document.getElementById('mp-presets');
+        try {
+            const data = await fetch('/api/playlists').then(r => r.json());
+            const presets = data.playlists || [];
+            
+            // Keep the + Save button
+            const saveBtn = el.querySelector('.preset-add');
+            el.innerHTML = '<span class="preset-label">Presets</span>';
+            
+            presets.forEach(p => {
+                const btn = document.createElement('button');
+                btn.className = 'preset-btn';
+                btn.textContent = p.toUpperCase();
+                btn.title = 'Click to load · right-click twice to delete preset';
+                btn.onclick = (e) => loadPreset(p, e.target);
+                btn.oncontextmenu = (e) => presetContext(e, p, btn);
+                el.appendChild(btn);
+            });
+            el.appendChild(saveBtn);
+        } catch(e) { console.error("Error loading presets", e); }
+    }
+
+    async function loadPreset(name, btn) {
+        try {
+            const items = await fetch(`/api/playlists/${name}`).then(r => r.json());
+            // Bulk add to queue
+            await fetch('/api/queue/clear', { method: 'POST' });
+            await fetch('/api/queue/add_bulk', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ tracks: items })
+            });
+            await refreshQueue();
+            
+            // Mark active
+            document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+            if (btn) btn.classList.add('active');
+        } catch(e) { console.error("Error loading preset", name, e); }
+    }
+
+    async function saveCurrentPlaylist() {
+        if (!_queueState.tracks.length) return alert("Queue is empty");
+        const name = prompt("Enter preset name:");
+        if (!name) return;
+        try {
+            await fetch(`/api/playlists/${name}`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ items: _queueState.tracks })
+            });
+            loadPresets();
+        } catch(e) { console.error("Error saving preset", e); }
+    }
+
+    function renderQueue() {
+        const el = document.getElementById('mp-playlist');
+        const queue = _queueState.tracks;
+        const playerIdx = _queueState.current_index;
+        
+        document.getElementById('mp-count').textContent = `${queue.length} item${queue.length !== 1 ? 's' : ''}`;
+        
+        if (!queue.length) {
+            el.innerHTML = '<div class="pl-item" style="color:var(--muted);cursor:default;padding:14px 16px;justify-content:center">Queue is empty</div>';
+            updateDisplay();
+            return;
+        }
+
+        el.innerHTML = queue.map((item, i) => `
+            <div class="pl-item${i === playerIdx ? ' active' : ''}" id="pli-${i}" draggable="true"
+                 ondragstart="_onDragStart(event,${i})"
+                 ondragend="_onDragEnd(event)"
+                 ondragover="_onDragOver(event,${i})"
+                 ondrop="_onDrop(event,${i})">
+                <div class="pl-item-content" onclick="playerSelect(${i})">
+                    <span class="pl-num">${String(i+1).padStart(2,'0')}</span>
+                    <span class="badge-type ${item.type}">${item.type}</span>
+                    <span class="pl-name">${cleanTitle(item.label)}</span>
+                    <span class="pl-now">▶</span>
+                </div>
+                <div class="pl-actions">
+                    <button class="pl-action-btn move" onclick="moveItem(${i}, -1)" title="Move Up">↑</button>
+                    <button class="pl-action-btn move" onclick="moveItem(${i}, 1)" title="Move Down">↓</button>
+                    <button class="pl-action-btn" onclick="removeItem(${i})" title="Remove">✕</button>
+                </div>
+            </div>`).join('');
+
+        updateDisplay();
+        const active = document.getElementById(`pli-${playerIdx}`);
+        if (active) active.scrollIntoView({block:'nearest'});
+
+        // Update mode buttons
+        const shufBtn = document.getElementById('btn-shuffle');
+        const m = _queueState.mode;
+        shufBtn.classList.toggle('active', m === 'shuffle');
+        shufBtn.title = m === 'shuffle' ? 'Shuffle: ON (plays queue in random order)'
+                                        : 'Shuffle: off (plays queue in order)';
+        const loopBtn = document.getElementById('btn-loop');
+        loopBtn.classList.toggle('active', m === 'repeat_all' || m === 'repeat_one');
+        // Make the repeat state unmistakable — critical for an emergency loop.
+        loopBtn.innerHTML = m === 'repeat_one' ? ICON_REPEAT_ONE : ICON_REPEAT;
+        loopBtn.title = m === 'repeat_all' ? 'Loop: ALL (queue repeats forever)'
+                      : m === 'repeat_one' ? 'Loop: ONE (current track repeats)'
+                      : 'Loop: off (queue plays once, then stops)';
+    }
+
+    // ── Drag-and-drop helpers for queue reordering ──
+    function _clearDragIndicators() {
+        document.querySelectorAll('.pl-item.drag-over-top, .pl-item.drag-over-bottom')
+            .forEach(el => el.classList.remove('drag-over-top', 'drag-over-bottom'));
+    }
+
+    function _onDragStart(e, idx) {
+        _dragIdx = idx;
+        requestAnimationFrame(() => {
+            const el = document.getElementById(`pli-${idx}`);
+            if (el) el.classList.add('dragging');
+        });
+        e.dataTransfer.effectAllowed = 'move';
+    }
+
+    function _onDragEnd(e) {
+        e.target.classList.remove('dragging');
+        _clearDragIndicators();
+        _dragIdx = -1;
+    }
+
+    function _onDragOver(e, idx) {
+        if (_dragIdx === -1 || idx === _dragIdx) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        _clearDragIndicators();
+        const el = document.getElementById(`pli-${idx}`);
+        if (!el) return;
+        const rect = el.getBoundingClientRect();
+        el.classList.add(e.clientY < rect.top + rect.height / 2 ? 'drag-over-top' : 'drag-over-bottom');
+    }
+
+    async function _onDrop(e, idx) {
+        e.preventDefault();
+        _clearDragIndicators();
+        if (_dragIdx === -1 || _dragIdx === idx) return;
+        const fromIdx = _dragIdx;
+        // Resolve target: above or below the hovered row
+        const el = document.getElementById(`pli-${idx}`);
+        let insertAt = idx;
+        if (el) {
+            const rect = el.getBoundingClientRect();
+            const dropBelow = e.clientY >= rect.top + rect.height / 2;
+            insertAt = dropBelow ? idx + 1 : idx;
+        }
+        // Adjust for the removal of fromIdx shifting subsequent indices
+        let toIdx = insertAt > fromIdx ? insertAt - 1 : insertAt;
+        // Clamp to valid range
+        toIdx = Math.max(0, Math.min(toIdx, _queueState.tracks.length - 1));
+        if (toIdx === fromIdx) return;
+        await fetch('/api/queue/move', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({from: fromIdx, to: toIdx})
+        });
+        await refreshQueue();
+    }
+
+    function updateDisplay() {
+        const titleEl = document.getElementById('mp-title');
+        const numEl   = document.getElementById('mp-tracknum');
+        const playBtn = document.getElementById('mp-btn-play');
+        const queue = _queueState.tracks;
+        const playerIdx = _queueState.current_index;
+
+        if (playerIdx < 0 || !queue[playerIdx]) {
+            titleEl.textContent = 'NO TRACK LOADED';
+            titleEl.classList.remove('scroll');
+            numEl.textContent = '— / —';
+            if (playBtn) playBtn.innerHTML = '▶';
+            return;
+        }
+
+        const item = queue[playerIdx];
+        const title = cleanTitle(item.label);
+        titleEl.textContent = title;
+        numEl.textContent = `${playerIdx+1} / ${queue.length}`;
+        if (playBtn) playBtn.innerHTML = '▶';
+
+        if (title.length > 28) {
+            titleEl.classList.add('scroll');
+            titleEl.style.setProperty('--scroll-dist', `-${Math.min(80, (title.length - 28) * 2.5)}%`);
+        } else {
+            titleEl.classList.remove('scroll');
+        }
+    }
+
+    async function playerSelect(idx) {
+        if (idx < 0 || idx >= _queueState.tracks.length) return;
+
+        // If local audio is already cued, OR another source is on air, picking a
+        // track must CUE local audio (pre-select, bus stays 0) — never hard-play
+        // it, or it would broadcast on top of the live source. The operator then
+        // crossfades. Only when nothing else is on air do we go live immediately.
+        if (_cued.has('emergency') || anotherSourceActive('emergency')) {
+            _cued.add('emergency');
+            _cuedAt['emergency'] = _cuedAt['emergency'] || Date.now();
+            _cueErrors.delete('emergency');
+            showEmergencyBrowser(true);
+            await fetch('/api/queue/select', {
+                method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({index: idx})
+            });
+            await refreshQueue();
+            // Picking the track makes local audio fade-ready → flip LOADING→CUED
+            // and enable the crossfade now rather than waiting for the next poll.
+            setBoomboxState('emergency', _bus.emergency || 0.0, true);
+            updateCrossfadeButton();
+            return;
+        }
+
+        // Turn on emergency bus if not already on
+        if (_bus.emergency <= 0.5) {
+            _bus.emergency = 1.0;
+            setBoomboxState('emergency', 1.0, true);
+            showEmergencyBrowser(true);
+            fetch('/api/bus', {
+                method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({source: 'emergency', level: 1.0})
+            });
+            fetch('/api/switch', {
+                method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({source: 'emergency'})
+            });
+        }
+
+        await fetch('/api/queue/play', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({index: idx})
+        });
+        await refreshQueue();
+    }
+
+    async function playerPlay() {
+        if (_queueState.current_index < 0 && _queueState.tracks.length) playerSelect(0);
+        else if (_queueState.current_index >= 0)           playerSelect(_queueState.current_index);
+    }
+    async function playerPrev() {
+        const len = _queueState.tracks.length;
+        if (!len) return;
+        let next = _queueState.current_index - 1;
+        if (next < 0) next = len - 1;
+        await playerSelect(next);
+    }
+    async function playerNext() {
+        const len = _queueState.tracks.length;
+        if (!len) return;
+        let next = _queueState.current_index + 1;
+        if (next >= len) {
+            if (_queueState.mode === 'repeat_all') next = 0;
+            else return; 
+        }
+        await playerSelect(next);
+    }
+    async function playerStop() {
+        await fetch('/api/queue/stop', { method: 'POST' });
+        _bus.emergency = 0.0;
+        setBoomboxState('emergency', 0.0, true);
+        showEmergencyBrowser(false);
+        await refreshQueue();
+    }
+
+    async function toggleShuffle() {
+        const newMode = _queueState.mode === 'shuffle' ? 'sequential' : 'shuffle';
+        await fetch('/api/queue/mode', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({mode: newMode})
+        });
+        await refreshQueue();
+    }
+    async function toggleLoop() {
+        let newMode = 'sequential';
+        if (_queueState.mode === 'sequential') newMode = 'repeat_all';
+        else if (_queueState.mode === 'repeat_all') newMode = 'repeat_one';
+        else if (_queueState.mode === 'repeat_one') newMode = 'sequential';
+        else newMode = 'repeat_all'; // from shuffle
+
+        await fetch('/api/queue/mode', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({mode: newMode})
+        });
+        await refreshQueue();
+    }
+
+    async function removeItem(idx) {
+        await fetch('/api/queue/remove', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({index: idx})
+        });
+        await refreshQueue();
+    }
+
+    async function moveItem(idx, dir) {
+        const newIdx = idx + dir;
+        if (newIdx < 0 || newIdx >= _queueState.tracks.length) return;
+        await fetch('/api/queue/move', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({from: idx, to: newIdx})
+        });
+        await refreshQueue();
+    }
+
+    async function clearQueue() {
+        if (confirm("Clear entire queue?")) {
+            await fetch('/api/queue/clear', { method: 'POST' });
+            await refreshQueue();
+        }
+    }
+
+    async function toggleAddFileDropdown() {
+        const el = document.getElementById('mp-file-dropdown');
+        const isShown = el.classList.contains('show');
+        document.querySelectorAll('.mp-dropdown-content').forEach(d => d.classList.remove('show'));
+        
+        if (!isShown) {
+            el.innerHTML = `
+                <div class="mp-dropdown-search">
+                    <input type="text" class="mp-search-input" placeholder="Search files..." oninput="updateFileDropdown(this.value)">
+                </div>
+                <div id="mp-file-list">
+                    <div class="mp-dropdown-item">Loading…</div>
+                </div>
+            `;
+            el.classList.add('show');
+            updateFileDropdown('');
+            // Focus search
+            setTimeout(() => el.querySelector('input').focus(), 50);
+        }
+    }
+
+    // ───────────────────────── Retro Radio Librarian (three-pane) ─────────────────────────
+    let _libTree = null;          // [{name, track_count, albums:[{name, tracks:[]}]}, ...]
+    let _libStreamsArtist = null; // synthetic pinned "Wave Farm Streams" artist
+    let _libSelArtist = null;     // selected artist name
+    let _libSelAlbum = null;      // selected album name
+    let _libFilterTimer = null;
+    const STREAMS_LABEL = '📡 Wave Farm Streams';
+
+    async function uploadFiles(files) {
+        if (!files || !files.length) return;
+        const btn = document.getElementById('upl-btn');
+        const orig = '&#11014; Upload';
+        let ok = 0, fail = 0;
+        for (let i = 0; i < files.length; i++) {
+            btn.textContent = `⬆ ${i + 1}/${files.length} ${files[i].name.slice(0, 18)}…`;
+            const fd = new FormData();
+            fd.append('file', files[i]);
+            try {
+                const r = await fetch('/api/music/upload', { method: 'POST', body: fd });
+                const j = await r.json();
+                if (r.ok && j.result === 'success') ok++;
+                else { fail++; console.error('upload rejected:', files[i].name, j); }
+            } catch (e) {
+                fail++; console.error('upload failed:', files[i].name, e);
+            }
+        }
+        btn.textContent = fail ? `⬆ ${ok} added, ${fail} failed` : `⬆ ${ok} added ✓`;
+        setTimeout(() => { btn.innerHTML = orig; }, 4000);
+        document.getElementById('upl-input').value = '';
+        // Cache was updated synchronously server-side — refresh the librarian now.
+        await loadLibTree();
+    }
+
+    async function toggleLibBrowser() {
+        const panel = document.getElementById('lib-browser');
+        const btn = document.getElementById('lib-toggle');
+        const open = panel.classList.toggle('open');
+        btn.classList.toggle('active', open);
+        if (open) {
+            if (!_libTree) await loadLibTree();
+            setTimeout(() => document.getElementById('lib-find').focus(), 50);
+        }
+    }
+
+    async function loadLibTree() {
+        try {
+            const [tree, streams] = await Promise.all([
+                fetch('/api/library/tree').then(r => r.json()),
+                fetch('/api/wavefarm/streams').then(r => r.json()).catch(() => [])
+            ]);
+            _libTree = tree.artists || [];
+            // Pin Wave Farm streams as a synthetic first "artist" so stream access is preserved.
+            if (streams && streams.length) {
+                _libStreamsArtist = {
+                    name: STREAMS_LABEL, isStreams: true, track_count: streams.length,
+                    albums: [{ name: 'Live Streams', tracks: streams.map(s => ({
+                        title: s.label, uri: s.url, isStream: true,
+                        duration_display: (s.lufs ? s.lufs + ' LUFS' : 'LIVE'),
+                        meta: { lufs: s.lufs }
+                    })) }]
+                };
+            }
+            document.getElementById('lib-stat').textContent =
+                `${tree.total_artists || 0} artists · ${tree.total_tracks || 0} tracks`;
+            libFilterNow('');
+        } catch (e) {
+            console.error('library tree load failed', e);
+            document.getElementById('lib-artists').innerHTML =
+                '<div class="lib-pane-head">Artists</div><div class="lib-empty">Error loading library</div>';
+        }
+    }
+
+    function libFilter(q) {
+        if (_libFilterTimer) clearTimeout(_libFilterTimer);
+        _libFilterTimer = setTimeout(() => libFilterNow(q), 150);
+    }
+
+    // Returns artists with albums/tracks narrowed to the query. An artist-name
+    // match keeps the whole artist; otherwise only matching albums/tracks survive.
+    function libFiltered(q) {
+        const base = [];
+        if (_libStreamsArtist) base.push(_libStreamsArtist);
+        for (const a of (_libTree || [])) base.push(a);
+        q = (q || '').trim().toLowerCase();
+        if (!q) return base;
+        const out = [];
+        for (const art of base) {
+            const artHit = art.name.toLowerCase().includes(q);
+            const albums = [];
+            for (const alb of art.albums) {
+                const albHit = alb.name.toLowerCase().includes(q);
+                const tracks = (artHit || albHit) ? alb.tracks
+                    : alb.tracks.filter(t => (t.title || '').toLowerCase().includes(q));
+                if (artHit || albHit || tracks.length) albums.push({ ...alb, tracks });
+            }
+            if (artHit || albums.length) {
+                const tc = albums.reduce((n, al) => n + al.tracks.length, 0);
+                out.push({ ...art, albums, track_count: artHit ? art.track_count : tc });
+            }
+        }
+        return out;
+    }
+
+    function libFilterNow(q) {
+        const arts = libFiltered(q);
+        // Keep current selection if it still exists, else default to first artist.
+        if (!arts.find(a => a.name === _libSelArtist)) {
+            _libSelArtist = arts.length ? arts[0].name : null;
+            _libSelAlbum = null;
+        }
+        renderLibArtists(arts);
+        renderLibAlbums(arts);
+        renderLibTracks(arts);
+    }
+
+    function _curArtist(arts) { return arts.find(a => a.name === _libSelArtist) || null; }
+
+    function renderLibArtists(arts) {
+        const el = document.getElementById('lib-artists');
+        let html = `<div class="lib-pane-head">Artists <span style="opacity:.5">(${arts.length})</span></div>`;
+        if (!arts.length) { el.innerHTML = html + '<div class="lib-empty">No matches</div>'; return; }
+        html += arts.map(a => `
+            <div class="lib-row ${a.name === _libSelArtist ? 'sel' : ''}" onclick="libSelectArtist(${JSON.stringify(a.name).replace(/"/g, '&quot;')})">
+                ${a.isStreams ? '' : '<span class="lib-icon">&#9835;</span>'}
+                <span class="lib-name">${escapeHtml(a.name)}</span>
+                <span class="lib-cnt">${a.track_count}</span>
+            </div>`).join('');
+        el.innerHTML = html;
+    }
+
+    function renderLibAlbums(arts) {
+        const el = document.getElementById('lib-albums');
+        const art = _curArtist(arts);
+        let html = '<div class="lib-pane-head">Albums</div>';
+        if (!art) { el.innerHTML = html + '<div class="lib-empty">Select an artist</div>'; return; }
+        const showAll = art.albums.length > 1;
+        const allSel = (_libSelAlbum === null || _libSelAlbum === '__all__') ? 'sel' : '';
+        if (showAll) {
+            html += `<div class="lib-row ${allSel}" onclick="libSelectAlbum('__all__')">
+                <span class="lib-icon">&#9776;</span>
+                <span class="lib-name">All Tracks</span>
+                <span class="lib-cnt">${art.track_count}</span>
+                <button class="lib-add" title="Queue all" onclick="event.stopPropagation(); libQueueArtist()">+ALL</button>
+            </div>`;
+        }
+        html += art.albums.map(al => `
+            <div class="lib-row ${_libSelAlbum === al.name ? 'sel' : ''}" onclick="libSelectAlbum(${JSON.stringify(al.name).replace(/"/g, '&quot;')})">
+                <span class="lib-icon">&#9679;</span>
+                <span class="lib-name">${escapeHtml(al.name)}</span>
+                <span class="lib-cnt">${al.tracks.length}</span>
+            </div>`).join('');
+        el.innerHTML = html;
+    }
+
+    function renderLibTracks(arts) {
+        const el = document.getElementById('lib-tracks');
+        const art = _curArtist(arts);
+        let html = '<div class="lib-pane-head">Tracks</div>';
+        if (!art) { el.innerHTML = html + '<div class="lib-empty">Select an album</div>'; return; }
+        let tracks = [];
+        if (_libSelAlbum === null || _libSelAlbum === '__all__') {
+            art.albums.forEach(al => tracks.push(...al.tracks));
+        } else {
+            const al = art.albums.find(a => a.name === _libSelAlbum);
+            tracks = al ? al.tracks : [];
+        }
+        if (!tracks.length) { el.innerHTML = html + '<div class="lib-empty">No tracks</div>'; return; }
+        const curUri = (typeof _queueState !== 'undefined' && _queueState && _queueState.current_index >= 0
+            && _queueState.tracks && _queueState.tracks[_queueState.current_index])
+            ? _queueState.tracks[_queueState.current_index].uri : null;
+        html += tracks.map((t, i) => {
+            const playing = curUri && (t.uri === curUri || t.path === curUri) ? 'playing' : '';
+            const dur = t.duration_display || '';
+            return `<div class="lib-row ${playing}" ondblclick="libPlayNow(${i})" oncontextmenu="return libRowContext(event, ${i})" title="Double-click to play now · right-click twice to delete file">
+                <span class="lib-name">${escapeHtml(t.title || '')}</span>
+                <span class="lib-dur">${dur}</span>
+                <button class="lib-add" title="Add next" onclick="event.stopPropagation(); libQueueTrack(${i}, 'next')">+&#9654;</button>
+                <button class="lib-add" title="Add to queue" onclick="event.stopPropagation(); libQueueTrack(${i}, 'end')">+</button>
+            </div>`;
+        }).join('');
+        el.innerHTML = html;
+        el._tracks = tracks; // cache for index-based actions
+    }
+
+    function libSelectArtist(name) {
+        _libSelArtist = name;
+        _libSelAlbum = null;
+        const arts = libFiltered(document.getElementById('lib-find').value);
+        renderLibArtists(arts);
+        renderLibAlbums(arts);
+        renderLibTracks(arts);
+    }
+
+    function libSelectAlbum(name) {
+        _libSelAlbum = name;
+        const arts = libFiltered(document.getElementById('lib-find').value);
+        renderLibAlbums(arts);
+        renderLibTracks(arts);
+    }
+
+    function _libTrackToQueueObj(t) {
+        if (t.isStream) {
+            return { type: 'stream', label: t.title, uri: t.uri, meta: t.meta || {} };
+        }
+        return {
+            type: 'file', label: t.title, uri: t.path || t.uri,
+            duration: t.duration, meta: { artist: t.artist, title: t.title, filename: t.filename }
+        };
+    }
+
+    async function libQueueTrack(i, position = 'end') {
+        const t = document.getElementById('lib-tracks')._tracks[i];
+        if (!t) return;
+        await fetch('/api/queue/add', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ track: _libTrackToQueueObj(t), position })
+        });
+        await refreshQueue();
+    }
+
+    async function libQueueArtist() {
+        const arts = libFiltered(document.getElementById('lib-find').value);
+        const art = _curArtist(arts);
+        if (!art) return;
+        const tracks = [];
+        art.albums.forEach(al => al.tracks.forEach(t => tracks.push(_libTrackToQueueObj(t))));
+        if (!tracks.length) return;
+        await fetch('/api/queue/add_bulk', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tracks })
+        });
+        await refreshQueue();
+    }
+
+    async function libPlayNow(i) {
+        const t = document.getElementById('lib-tracks')._tracks[i];
+        if (!t) return;
+        if (t.isStream) { await libQueueTrack(i, 'end'); return; }
+        // Files: one-shot play-now via existing engine route, then reflect in queue.
+        await fetch('/api/music/play', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename: t.path || t.uri })
+        });
+        await refreshQueue();
+    }
+
+    // Loop button artwork — standard media-player cycle arrows, with a "1"
+    // inside for repeat-one. Same stroke style as the static shuffle icon.
+    const ICON_REPEAT =
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+        '<polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/>' +
+        '<polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>';
+    const ICON_REPEAT_ONE =
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+        '<polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/>' +
+        '<polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>' +
+        '<text x="12" y="15.5" font-size="10" font-weight="bold" fill="currentColor" stroke="none" text-anchor="middle">1</text></svg>';
+
+    // ── Two-step right-click delete: first right-click arms (red), second
+    //    within 3s confirms. Anything else disarms. No visible buttons.
+    let _armDelTimer = null;
+    function _disarmDelete() {
+        if (_armDelTimer) { clearTimeout(_armDelTimer); _armDelTimer = null; }
+        document.querySelectorAll('.arm-delete').forEach(el => {
+            el.classList.remove('arm-delete');
+            if (el._origHtml !== undefined) { el.innerHTML = el._origHtml; delete el._origHtml; }
+        });
+    }
+    function _armDelete(el, msg) {
+        _disarmDelete();
+        el.classList.add('arm-delete');
+        if (msg) { el._origHtml = el.innerHTML; el.innerHTML = msg; }
+        _armDelTimer = setTimeout(_disarmDelete, 3000);
+    }
+
+    function libRowContext(e, i) {
+        e.preventDefault();
+        const t = document.getElementById('lib-tracks')._tracks[i];
+        if (!t || t.isStream) return false;  // streams aren't files — nothing to delete
+        const row = e.currentTarget;
+        if (row.classList.contains('arm-delete')) {
+            _disarmDelete();
+            libDeleteTrack(t);
+        } else {
+            _armDelete(row, `<span class="lib-name">Right-click again to DELETE file</span><span class="lib-dur">${escapeHtml(t.title || '')}</span>`);
+        }
+        return false;
+    }
+
+    async function libDeleteTrack(t) {
+        try {
+            const r = await fetch('/api/music/delete', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: t.path })
+            });
+            const j = await r.json().catch(() => ({}));
+            if (!r.ok || j.error) { alert(j.error || 'Delete failed'); return; }
+            await loadLibTree();
+            await refreshQueue();  // server pruned matching queue entries
+        } catch (e) { console.error('delete failed', e); }
+    }
+
+    function presetContext(e, name, btn) {
+        e.preventDefault();
+        if (btn.classList.contains('arm-delete')) {
+            _disarmDelete();
+            fetch(`/api/playlists/${encodeURIComponent(name)}`, { method: 'DELETE' })
+                .then(() => loadPresets());
+        } else {
+            _armDelete(btn, 'DELETE?');
+        }
+        return false;
+    }
+
+    function escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, c =>
+            ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+    // ─────────────────────────────────────────────────────────────────────────────────────
+
+    let _libraryCache = [];
+    let _streamCache = [];
+    let _libraryPath = '';
+    let _libraryFolders = [];
+    let _libSearchSeq = 0;
+    let _libSearchTimer = null;
+
+    // Debounced entry point for oninput — avoids hammering /api/library on every keystroke
+    function updateFileDropdown(query) {
+        if (_libSearchTimer) clearTimeout(_libSearchTimer);
+        _libSearchTimer = setTimeout(() => _updateFileDropdownNow(query), 200);
+    }
+
+    async function _updateFileDropdownNow(query) {
+        const listEl = document.getElementById('mp-file-list');
+        const seq = ++_libSearchSeq; // stale-response guard
+        try {
+            // When searching, ignore folder path — search all
+            const libUrl = query
+                ? `/api/library?q=${encodeURIComponent(query)}`
+                : `/api/library?path=${encodeURIComponent(_libraryPath)}`;
+
+            const [libData, streamData] = await Promise.all([
+                fetch(libUrl).then(r => r.json()),
+                fetch('/api/wavefarm/streams').then(r => r.json())
+            ]);
+
+            // Drop stale response if a newer search has been initiated
+            if (seq !== _libSearchSeq) return;
+
+            _libraryCache = libData.library || [];
+            _libraryFolders = libData.folders || [];
+            _streamCache = (streamData || []).filter(s => !query || s.label.toLowerCase().includes(query.toLowerCase()));
+
+            if (!_libraryCache.length && !_streamCache.length && !_libraryFolders.length) {
+                listEl.innerHTML = '<div class="mp-dropdown-item">No matches found</div>';
+                return;
+            }
+
+            let html = '';
+
+            // Breadcrumb navigation (only when not searching)
+            if (!query && _libraryPath) {
+                const parts = _libraryPath.split('/');
+                let crumbs = '<span onclick="navigateLibrary(\'\')" style="cursor:pointer;color:var(--cyan)">ROOT</span>';
+                let acc = '';
+                parts.forEach((p, i) => {
+                    acc += (i > 0 ? '/' : '') + p;
+                    const path = acc;
+                    crumbs += ` / <span onclick="navigateLibrary('${path}')" style="cursor:pointer;color:var(--cyan)">${p}</span>`;
+                });
+                html += `<div style="font-size:9px; padding:6px 12px; border-bottom:1px solid rgba(255,255,255,0.05); color:var(--muted)">${crumbs}</div>`;
+            }
+
+            // Render subfolders (only when not searching)
+            if (!query && _libraryFolders.length > 0) {
+                html += _libraryFolders.map(f => `
+                    <div class="mp-dropdown-item" onclick="navigateLibrary('${f.path}')" style="color:var(--cyan)">
+                        <span style="margin-right:6px">&#128193;</span> ${f.name} <span style="opacity:0.4; margin-left:8px; font-size:9px">${f.count} files</span>
+                    </div>
+                `).join('');
+            }
+
+            // Render Streams first if they match
+            if (_streamCache.length > 0) {
+                html += '<div class="mp-dropdown-label" style="font-size:9px; opacity:0.5; padding:4px 12px; border-bottom:1px solid rgba(255,255,255,0.05); margin-bottom:4px">WAVE FARM STREAMS</div>';
+                html += _streamCache.map((s, idx) => `
+                    <div class="mp-dropdown-item" style="display:flex; align-items:center; gap:8px">
+                        <div style="flex:1; min-width:0" onclick="addStreamToQueue(${idx}, 'end')">
+                            <div style="display:flex; justify-content:space-between; width:100%">
+                                <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--green)">${s.label}</span>
+                                <span style="opacity:0.5; font-size:9px; flex-shrink:0; margin-left:8px">${s.lufs || '--'} LUFS</span>
+                            </div>
+                            <div style="font-size:9px; opacity:0.4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">LIVE BROADCAST STREAM</div>
+                        </div>
+                        <div style="display:flex; gap:4px">
+                            <button class="mp-pl-btn" onclick="event.stopPropagation(); addStreamToQueue(${idx}, 'next')" title="Add Next" style="padding:2px 4px; font-size:8px">+&#9654;</button>
+                            <button class="mp-pl-btn" onclick="event.stopPropagation(); addStreamToQueue(${idx}, 'end')" title="Add to End" style="padding:2px 4px; font-size:8px">+</button>
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            // Render Files
+            if (_libraryCache.length > 0) {
+                if (_streamCache.length > 0 || _libraryFolders.length > 0) {
+                    html += '<div class="mp-dropdown-label" style="font-size:9px; opacity:0.5; padding:8px 12px 4px 12px; border-bottom:1px solid rgba(255,255,255,0.05); margin-bottom:4px">LOCAL ARCHIVE</div>';
+                }
+                html += _libraryCache.map((item, idx) => `
+                    <div class="mp-dropdown-item" style="display:flex; align-items:center; gap:8px">
+                        <div style="flex:1; min-width:0" onclick="addLibraryItemToQueue(${idx}, 'end')">
+                            <div style="display:flex; justify-content:space-between; width:100%">
+                                <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis">${item.title}</span>
+                                <span style="opacity:0.5; font-size:9px; flex-shrink:0; margin-left:8px">${item.duration_display}</span>
+                            </div>
+                            <div style="font-size:9px; opacity:0.4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">${item.artist !== 'UNKNOWN' ? item.artist : item.filename}</div>
+                        </div>
+                        <div style="display:flex; gap:4px">
+                            <button class="mp-pl-btn" onclick="event.stopPropagation(); addLibraryItemToQueue(${idx}, 'next')" title="Add Next" style="padding:2px 4px; font-size:8px">+&#9654;</button>
+                            <button class="mp-pl-btn" onclick="event.stopPropagation(); addLibraryItemToQueue(${idx}, 'end')" title="Add to End" style="padding:2px 4px; font-size:8px">+</button>
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            listEl.innerHTML = html;
+        } catch(e) {
+            if (seq !== _libSearchSeq) return;
+            console.error("Dropdown error", e);
+            listEl.innerHTML = '<div class="mp-dropdown-item">Error loading items</div>';
+        }
+    }
+
+    function navigateLibrary(path) {
+        _libraryPath = path;
+        updateFileDropdown('');
+        // Clear search input if present
+        const inp = document.querySelector('#mp-file-dropdown .mp-search-input');
+        if (inp) inp.value = '';
+    }
+
+    async function addStreamToQueue(idx, position = 'end') {
+        const item = _streamCache[idx];
+        if (!item) return;
+        
+        const track = { 
+            type: 'stream', 
+            label: item.label, 
+            uri: item.url,
+            meta: { lufs: item.lufs }
+        };
+        
+        await fetch('/api/queue/add', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({track: track, position: position})
+        });
+        await refreshQueue();
+    }
+
+    async function addFileToQueue(filename) {
+        const track = { type: 'file', label: filename, uri: `/home/tower-two/wgxc-dashboard/music/primary/${filename}` };
+        await fetch('/api/queue/add', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({track: track})
+        });
+        await refreshQueue();
+    }
+
+    async function addLibraryItemToQueue(idx, position = 'end') {
+        const item = _libraryCache[idx];
+        if (!item) return;
+        
+        const track = { 
+            type: 'file', 
+            label: item.title, 
+            uri: item.path,
+            duration: item.duration,
+            meta: { artist: item.artist, title: item.title, filename: item.filename }
+        };
+        
+        await fetch('/api/queue/add', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({track: track, position: position})
+        });
+        await refreshQueue();
+    }
+
+    async function addStreamPrompt() {
+        const url = prompt("Enter stream URL:");
+        if (!url) return;
+        const name = prompt("Enter stream name (optional):") || url.split('/').pop() || "Stream";
+        const track = { type: 'stream', label: name, uri: url };
+        await fetch('/api/queue/add', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({track: track})
+        });
+        await refreshQueue();
+    }
+
+    window.addEventListener('click', (e) => {
+        // Updated to not close if clicking inside search
+        if (!e.target.closest('.mp-add-dropdown') && !e.target.matches('.mp-pl-btn')) {
+            document.querySelectorAll('.mp-dropdown-content').forEach(d => d.classList.remove('show'));
+        }
+    });
+
+    // Keep desktop fader readout + mobile master readout in sync; flag off-unity.
+    function syncVolDisplay(v) {
+        const txt = fmtDb(v);
+        const d = document.getElementById('vol-val');       if (d) d.textContent = txt;
+        const m = document.getElementById('vol-val-mobile'); if (m) {
+            m.textContent = txt;
+            m.classList.toggle('off-unity', Math.abs(v - 1.0) > 0.001);
+        }
+    }
+
+    async function setVolume(val) {
+        const v = parseFloat(val);
+        _masterVol = v;
+        syncVolDisplay(v);
+        // Refresh all effective level displays
+        ['automation','live','emergency'].forEach(s => {
+            const trim = parseFloat(document.getElementById(`trim-${s}`)?.value || 1);
+            updateEffective(s, trim);
+        });
+        await fetch('/api/volume', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({level: v})
+        });
+    }
+
+    let globalActiveSource = '';
+
+    function sourceLabel(src) {
+        if (src === 'emergency') return 'LOCAL AUDIO';
+        if (src === 'automation') return 'WGXC';
+        if (src === 'live') return 'LIVE';
+        return src ? src.toUpperCase() : '–';
+    }
+
+    async function refreshLog() {
+        const el = document.getElementById('mp-log');
+        try {
+            const data = await fetch('/api/queue/log?limit=10').then(r => r.json());
+            const lines = data.log || [];
+            if (!lines.length) {
+                el.innerHTML = '<div style="opacity:0.3">No log entries yet</div>';
+            } else {
+                el.innerHTML = lines.map(line => `
+                    <div style="margin-bottom:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">
+                        <span style="opacity:0.3">${line.split('  ')[0].split('T')[1]}</span>
+                        <span style="margin-left:8px">${line.split('  ').slice(2).join('  ').trim()}</span>
+                    </div>
+                `).reverse().join('');
+            }
+        } catch(e) { console.error("Error refreshing log", e); }
+    }
+
+    // Call this inside updateStatus every 10 seconds or so
+    let _lastLogCheck = 0;
+
+    // Lost-contact debounce: a single failed /api/status poll only means the
+    // browser couldn't reach the Flask UI — it says nothing about the broadcast.
+    // Require several consecutive misses before declaring lost contact.
+    let _statusFailCount = 0;
+    const STATUS_FAIL_MAX = 4;
+
+    async function updateStatus() {
+        const statusEl    = document.getElementById('status');
+        const srcDot      = document.getElementById('source-dot');
+        const headerDot   = document.getElementById('header-dot');
+        const headerSrc   = document.getElementById('header-src');
+        const detail      = document.getElementById('updated-at-detail');
+        const badge       = document.getElementById('badge-time');
+        const statusLight = document.getElementById('status-light');
+
+        try {
+            const data = await fetch('/api/status').then(r => r.json());
+            _statusFailCount = 0;   // poll succeeded — clear any lost-contact state
+            const src  = (data.selected || '').trim().toLowerCase();
+            globalActiveSource = src;
+
+            if (!statusEl.classList.contains('silent')) {
+                statusEl.textContent = sourceLabel(src);
+                statusEl.className   = 'source-name' + (src ? ` source-${src}` : '');
+                statusLight.classList.remove('off');
+            }
+
+            srcDot.className      = 'source-dot' + (src ? ` ${src}` : '');
+            headerDot.className   = 'header-dot' + (src === 'live' ? ' live' : src === 'emergency' ? ' err' : ' ok');
+            headerSrc.textContent = sourceLabel(src);
+
+            const t = new Date().toLocaleTimeString();
+            badge.textContent  = t;
+            detail.textContent = `Updated ${t}`;
+
+            // Uptime — reset when source changes
+            if (src && src !== _prevSource) {
+                _prevSource = src;
+                _sourceStartTime = Date.now();
+            }
+
+            // Metadata — show current track/stream and "Up Next"
+            const metaEl = document.getElementById('hud-meta');
+            const nextEl = document.getElementById('hud-next');
+            if (metaEl) {
+                let nowText = '';
+                if (src === 'emergency' && _queueState.current_index >= 0 && _queueState.tracks[_queueState.current_index]) {
+                    const t = _queueState.tracks[_queueState.current_index];
+                    const artist = (t.meta && t.meta.artist && t.meta.artist !== 'UNKNOWN') ? t.meta.artist : '';
+                    const title = (t.meta && t.meta.title) ? t.meta.title : cleanTitle(t.label);
+                    nowText = artist ? `${artist} — ${title}` : title;
+                } else if (data.meta) {
+                    nowText = data.meta;
+                } else if (src === 'automation') {
+                    nowText = 'WGXC Stream';
+                } else if (src === 'live' && data.stream_label && data.stream_label !== 'NONE') {
+                    nowText = data.stream_label;
+                }
+                metaEl.textContent = nowText;
+            }
+            if (nextEl) {
+                let nextText = '';
+                if (src === 'emergency' && _queueState.current_index >= 0 && _queueState.tracks.length > 1) {
+                    const nextIdx = _queueState.current_index + 1;
+                    const nextTrack = nextIdx < _queueState.tracks.length
+                        ? _queueState.tracks[nextIdx]
+                        : (_queueState.mode === 'repeat_all' ? _queueState.tracks[0] : null);
+                    if (_queueState.mode === 'repeat_one') {
+                        nextText = 'Repeat';
+                    } else if (nextTrack) {
+                        const a = (nextTrack.meta && nextTrack.meta.artist && nextTrack.meta.artist !== 'UNKNOWN') ? nextTrack.meta.artist : '';
+                        const t = (nextTrack.meta && nextTrack.meta.title) ? nextTrack.meta.title : cleanTitle(nextTrack.label);
+                        nextText = a ? `${a} — ${t}` : t;
+                    }
+                }
+                nextEl.innerHTML = nextText
+                    ? `<span class="hud-next-label">Up Next</span>${nextText}`
+                    : '';
+            }
+
+            // Server-side VU meter
+            const vuFill = document.getElementById('vu-fill');
+            const vuDbEl = document.getElementById('vu-db');
+            const rmsDb  = typeof data.rms_db === 'number' ? data.rms_db : -100;
+            if (vuFill && vuDbEl) {
+                if (rmsDb > -100) {
+                    const pct = Math.max(0, Math.min(100, (rmsDb + 60) / 60 * 100));
+                    vuFill.style.width = pct + '%';
+                    vuFill.style.background = rmsDb > -6 ? 'var(--red)' :
+                                              rmsDb > -18 ? 'var(--orange)' : 'var(--green)';
+                    vuDbEl.textContent = rmsDb.toFixed(1) + ' dBFS';
+                    vuDbEl.style.color = rmsDb > -6 ? 'var(--red)' :
+                                         rmsDb > -18 ? 'var(--orange)' : 'var(--dim)';
+                } else {
+                    vuFill.style.width = '0%';
+                    vuDbEl.textContent = '—';
+                    vuDbEl.style.color = '';
+                }
+            }
+
+            // Server-side silence LED (< -40 dBFS for > 30s = alarm)
+            const silenceLed = document.getElementById('led-alsa'); // placeholder, real led below
+            const silEl = document.getElementById('led-silence');
+            if (silEl) {
+                if (rmsDb < -40) {
+                    if (_serverSilenceStart === null) _serverSilenceStart = Date.now();
+                    const dur = Date.now() - _serverSilenceStart;
+                    silEl.className = dur > 30000 ? 'conf-led blink' : 'conf-led warn';
+                } else {
+                    _serverSilenceStart = null;
+                    silEl.className = 'conf-led ok';
+                }
+            }
+
+            // Sync volume slider
+            if (data.volume) {
+                const vs = document.getElementById('vol-slider');
+                if (vs && document.activeElement !== vs) {
+                    const mv = parseFloat(data.volume);
+                    vs.value = mv;
+                    _masterVol = mv;
+                    syncVolDisplay(mv);
+                }
+            }
+
+            // Sync trim faders
+            if (data.trim) {
+                ['automation','live','emergency'].forEach(s => {
+                    const el  = document.getElementById(`trim-${s}`);
+                    const val = data.trim[s];
+                    if (el && document.activeElement !== el && val && !String(val).includes('Error')) {
+                        const v = parseFloat(val);
+                        el.value = v;
+                        document.getElementById(`trim-val-${s}`).textContent = fmtDb(v);
+                        updateEffective(s, v);
+                    }
+                });
+            }
+
+            // Sync bus state → boombox power buttons
+            if (data.bus) {
+                _streamSelected = !!(data.stream_label && data.stream_label !== 'NONE');
+                ['automation','live','emergency'].forEach(s => {
+                    // Don't clobber bus while a crossfade is running or while source is cued
+                    if (!_fading && !_cued.has(s)) {
+                        _bus[s] = parseFloat(data.bus[s]) || 0.0;
+                    }
+                    const isReady = data.ready ? data.ready[s] : true;
+                    _ready[s] = isReady;
+                    let label = 'ON';
+                    if (s === 'live' && data.stream_label && data.stream_label !== 'NONE') {
+                        label = data.stream_label;
+                    }
+                    // During a crossfade the fade animation owns these two
+                    // buttons — poll updates here caused arrhythmic flashing.
+                    if (!(_fading && (s === _fadeFrom || s === _fadeTo))) {
+                        setBoomboxState(s, _bus[s], isReady, label);
+                    }
+                });
+                showEmergencyBrowser(_bus.emergency > 0.5 || _cued.has('emergency'));
+                showStreamSelector(_bus.live > 0.5 || _cued.has('live'));
+                updateCrossfadeButton();
+
+                // Star cluster if active source is buffering
+                const activeSrc = src || 'automation';
+                _isBuffering = _bus[activeSrc] > 0.5 && data.ready && data.ready[activeSrc] === false;
+            }
+
+            // Automation-loss fallback banner: only meaningful while the
+            // automation bus is what's routed to air — when live/emergency is
+            // selected the substitution isn't audible, so don't alarm.
+            const fbBanner = document.getElementById('fallback-banner');
+            if (fbBanner) {
+                fbBanner.style.display =
+                    (data.fallback_active && src === 'automation') ? '' : 'none';
+            }
+
+            // AGC gain bar (bipolar from 0; hidden when dsp.gain unavailable)
+            const agcWrap = document.getElementById('agc-wrap');
+            if (agcWrap) {
+                const g = data.dsp && typeof data.dsp.gain_db === 'number' ? data.dsp.gain_db : null;
+                if (g !== null && data.dsp.norm_on) {
+                    agcWrap.style.display = '';
+                    const pos = v => Math.max(0, Math.min(100, (v + 15) / 45 * 100));
+                    const zero = pos(0), p = pos(g);
+                    const fill = document.getElementById('agc-fill');
+                    const lbl  = document.getElementById('agc-db');
+                    const pinned = g >= 29.5 || g <= -14.5;
+                    fill.style.left  = Math.min(zero, p) + '%';
+                    fill.style.width = Math.max(0.5, Math.abs(p - zero)) + '%';
+                    // heat scale: blue (small correction) -> purple -> red (hard-working)
+                    const t = Math.min(1, Math.abs(g) / 30);
+                    const hue = 220 + t * 120;  // 220 blue -> 280 purple -> 340 red
+                    const agcColor = pinned ? 'var(--red)' : 'hsl(' + hue + ', 85%, 58%)';
+                    fill.style.background = agcColor;
+                    lbl.textContent = (g > 0 ? '+' : '') + g.toFixed(1) + ' dB';
+                    lbl.style.color = pinned ? 'var(--red)' : 'var(--dim)';
+                } else {
+                    agcWrap.style.display = 'none';
+                }
+            }
+
+            // LUFS normalizer readout: gain ≠ 0 means the AGC is actively
+            // correcting level right now; amber past ±6 dB of correction.
+            const normEl = document.getElementById('sys-norm');
+            if (normEl && data.dsp) {
+                if (!data.dsp.norm_on) {
+                    normEl.textContent = 'NORM OFF';
+                    normEl.style.color = 'var(--dim)';
+                } else if (typeof data.dsp.gain_db === 'number') {
+                    const g = data.dsp.gain_db;
+                    normEl.textContent = `NORM ${g >= 0 ? '+' : ''}${g.toFixed(1)} dB`;
+                    normEl.style.color = Math.abs(g) > 6 ? 'var(--orange)' :
+                                         Math.abs(g) > 0.2 ? 'var(--green)' : '';
+                } else {
+                    normEl.textContent = 'NORM —';
+                    normEl.style.color = '';
+                }
+            }
+
+            // ALSA/UPSTREAM LEDs are broadcast truth, owned by updateHealth()
+            // (/api/health). /api/status reachability is UI-link health only and
+            // must not paint the broadcast LEDs.
+
+            // Refresh queue state periodically
+            await refreshQueue();
+
+            // Refresh log every 10 seconds
+            if (Date.now() - _lastLogCheck > 10000) {
+                await refreshLog();
+                _lastLogCheck = Date.now();
+            }
+
+        } catch(e) {
+            // Failed poll = lost contact with the Flask UI, not proven dead air.
+            // Debounce: ignore transient blips; the success path self-clears.
+            _statusFailCount++;
+            if (_statusFailCount < STATUS_FAIL_MAX) return;
+            // Honest "status unknown" — never claims OFFLINE or names a cause.
+            statusEl.textContent = 'LOST CONTACT WITH TOWER';
+            statusEl.className   = 'source-name source-err';
+            statusLight.classList.add('off');
+            srcDot.className     = 'source-dot';      // neutral, not red
+            headerDot.className  = 'header-dot';      // unknown, not "down"
+            headerSrc.textContent = 'no contact';
+            detail.innerHTML     = 'Can\'t confirm broadcast status. Check your connection, or ' +
+                '<a href="#" onclick="location.reload();return false" style="color:var(--cyan)">refresh</a>.';
+            // Do NOT touch broadcast LEDs — /api/health owns those.
+        }
+    }
+
+    // rAF-driven progress bar — smooth motion, throttled text update to 4 Hz
+    let _lastProgressText = 0;
+    const _progTimeEl = () => document.getElementById('mp-time');
+    const _progBarEl  = () => document.getElementById('mp-progress');
+
+    function tickProgress(ts) {
+        const timeEl = _progTimeEl();
+        const barEl  = _progBarEl();
+        if (!timeEl || !barEl) { requestAnimationFrame(tickProgress); return; }
+
+        if (_queueState.current_index < 0 || _bus.emergency <= 0.5 || !_queueState.started_at) {
+            timeEl.textContent = '0:00 / 0:00';
+            barEl.style.width = '0%';
+            requestAnimationFrame(tickProgress);
+            return;
+        }
+
+        const item = _queueState.tracks[_queueState.current_index];
+        if (item && item.type === 'stream') {
+            timeEl.textContent = '∞';
+            barEl.style.width = '100%';
+            requestAnimationFrame(tickProgress);
+            return;
+        }
+        const duration = (item && item.duration) ? item.duration : 240;
+        const now = (Date.now() / 1000) - _serverSkew;
+        const elapsed = Math.max(0, now - _queueState.started_at);
+
+        barEl.style.width = Math.min(100, (elapsed / duration) * 100) + '%';
+
+        // Text at 4 Hz — enough to read, cheap to render
+        if (!_lastProgressText || ts - _lastProgressText > 250) {
+            timeEl.textContent = `${fmtTime(elapsed)} / ${fmtTime(duration)}`;
+            _lastProgressText = ts;
+        }
+        requestAnimationFrame(tickProgress);
+    }
+    requestAnimationFrame(tickProgress);
+
+    setInterval(updateStatus, 1000);
+
+    async function updateHealth() {
+        try {
+            const data = await fetch('/api/health').then(r => r.json());
+            const upLed = document.getElementById('led-upstream');
+            if (upLed) upLed.className = 'conf-led ' + (data.upstream ? 'ok' : 'err');
+            // ALSA LED = real broadcast truth (Liquidsoap reachable), from /api/health.
+            const alsaLed = document.getElementById('led-alsa');
+            if (alsaLed) alsaLed.className = 'conf-led ' + (data.alsa ? 'ok' : 'err');
+        } catch(e) {}   // failed health poll = UI-link loss; leave LEDs at last-known
+    }
+    setInterval(updateHealth, 15000);
+
+    // ── Thermal / fan widget (mbpfan installed after the 2026-07-02 85°C
+    //    overheat that caused on-air skipping — this is the early warning) ──
+    async function updateThermal() {
+        const widget = document.getElementById('thermal-widget');
+        const fan    = document.getElementById('fan-icon');
+        const text   = document.getElementById('thermal-text');
+        if (!widget || !fan || !text) return;
+        try {
+            const d = await fetch('/api/thermal').then(r => r.json());
+            const rpm  = d.fan_rpm;
+            const temp = d.cpu_temp_c;
+            const rpmTxt  = (typeof rpm  === 'number' && rpm > 0) ? `${rpm} RPM` : '—';
+            const tempTxt = (typeof temp === 'number') ? `${Math.round(temp)}°C` : '—';
+            text.textContent = `${rpmTxt} · ${tempTxt}`;
+            if (typeof rpm === 'number' && rpm > 0) {
+                fan.classList.remove('stopped');
+                // Spin period inversely proportional to RPM, clamped 0.3–3s
+                fan.style.animationDuration =
+                    Math.max(0.3, Math.min(3, 60 / (rpm / 1000))) + 's';
+            } else {
+                fan.classList.add('stopped');
+            }
+            widget.className = 'hud-sys-item thermal-widget' +
+                (typeof temp !== 'number' ? ' unknown' :
+                 temp >= 80 ? ' hot' :
+                 temp >= 70 ? ' warm' : '');
+        } catch(e) {
+            text.textContent = '—';
+            fan.classList.add('stopped');
+            widget.className = 'hud-sys-item thermal-widget unknown';
+        }
+    }
+    updateThermal();
+    setInterval(updateThermal, 5000);
+    updateHealth();
+
+    // ── Failover (Angry Audio Failsafe A/B) ──────────────────────────────────
+    let _foBusy = false;   // suppress the poll from fighting an in-flight action
+    async function updateFailsafe() {
+        if (_foBusy) return;
+        const dot   = document.getElementById('fo-board-dot');
+        const txt   = document.getElementById('fo-board-txt');
+        const chanA = document.getElementById('fo-chan-a');
+        const chanB = document.getElementById('fo-chan-b');
+        const banner= document.getElementById('fo-banner');
+        const bHand = document.getElementById('fo-handoff');
+        const bTake = document.getElementById('fo-takeback');
+        try {
+            const d = await fetch('/api/failsafe/status').then(r => r.json());
+            if (!d.available) {
+                dot.className = 'fo-dot down'; txt.textContent = 'WATCHDOG OFFLINE';
+                chanA.className = 'fo-chan'; chanB.className = 'fo-chan';
+                banner.classList.remove('show');
+                bHand.disabled = false; bTake.disabled = false;  // local mute still works
+                return;
+            }
+            dot.className = 'fo-dot ' + (d.board_up ? 'up' : 'down');
+            txt.textContent = d.board_up ? ('ON AIR: ' + d.on_air) : 'BOARD DOWN';
+            const onA = d.on_air === 'A', onB = d.on_air === 'B';
+            chanA.className = 'fo-chan' + (onA ? ' live-a' : '');
+            chanB.className = 'fo-chan' + (onB ? ' live-b' : '');
+            banner.classList.toggle('show', onB);
+            bHand.disabled = onB;   // already on backup
+            bTake.disabled = onA;   // already on primary
+        } catch (e) {
+            dot.className = 'fo-dot down'; txt.textContent = 'WATCHDOG OFFLINE';
+        }
+    }
+    setInterval(updateFailsafe, 5000);
+    updateFailsafe();
+
+    async function failsafeHandoff() {
+        if (!confirm('Hand broadcast to the BACKUP (Player 2)?\n\nThis SILENCES Primary (A) and cuts FM to the MacOS backup player. A stays off-air until you Take Back.')) return;
+        _foBusy = true;
+        try {
+            const r = await fetch('/api/failsafe/handoff', { method: 'POST' });
+            if (r.status === 423) { const j = await r.json(); alert('Locked by ' + (j.holder && j.holder.user || 'another operator')); return; }
+            if (!r.ok) { alert('Handoff failed (' + r.status + ')'); return; }
+        } catch (e) { alert('Handoff failed — network error'); return; }
+        finally { _foBusy = false; }
+        updateFailsafe(); updateStatus();
+    }
+    async function failsafeTakeback() {
+        if (!confirm('Take broadcast BACK to Primary (A)?\n\nThis restores A’s audio and returns FM to this tower.')) return;
+        _foBusy = true;
+        try {
+            const r = await fetch('/api/failsafe/takeback', { method: 'POST' });
+            if (r.status === 423) { const j = await r.json(); alert('Locked by ' + (j.holder && j.holder.user || 'another operator')); return; }
+            if (!r.ok) { alert('Take-back failed (' + r.status + ')'); return; }
+        } catch (e) { alert('Take-back failed — network error'); return; }
+        finally { _foBusy = false; }
+        updateFailsafe(); updateStatus();
+    }
+
+    async function updateDiskHealth() {
+        try {
+            const data = await fetch('/api/system/health').then(r => r.json());
+            const diskLed = document.getElementById('led-disk');
+            const banner  = document.getElementById('disk-warning');
+            const bannerText = document.getElementById('disk-warning-text');
+
+            const hasWarning = !!data.warning;
+            const isCritical = !data.smart_ok || data.read_only ||
+                               (data.disk_usage_pct !== null && data.disk_usage_pct >= 95);
+
+            // LED state
+            if (diskLed) {
+                if (!data.smart_ok || data.read_only) {
+                    diskLed.className = 'conf-led blink';
+                } else if (hasWarning) {
+                    diskLed.className = 'conf-led warn';
+                } else {
+                    diskLed.className = 'conf-led ok';
+                }
+            }
+
+            // Banner
+            if (banner && bannerText) {
+                if (hasWarning) {
+                    let msg = data.warning;
+                    if (data.disk_usage_pct !== null) {
+                        msg += `  |  USAGE ${data.disk_usage_pct}%`;
+                    }
+                    bannerText.textContent = msg;
+                    banner.style.display = '';
+                } else {
+                    banner.style.display = 'none';
+                }
+            }
+        } catch(e) {
+            // Don't crash — disk health is advisory
+            const diskLed = document.getElementById('led-disk');
+            if (diskLed) diskLed.className = 'conf-led warn';
+        }
+    }
+    setInterval(updateDiskHealth, 60000);
+    updateDiskHealth();
+
+    function fmtUptime(sec) {
+        if (sec == null) return '—';
+        const d = Math.floor(sec / 86400);
+        const h = Math.floor((sec % 86400) / 3600);
+        const m = Math.floor((sec % 3600) / 60);
+        if (d > 0) return `${d}d ${h}h`;
+        if (h > 0) return `${h}h ${m}m`;
+        return `${m}m`;
+    }
+
+    async function updateSysInfo() {
+        const upEl   = document.getElementById('sys-uptime');
+        const memEl  = document.getElementById('sys-mem');
+        const tempEl = document.getElementById('sys-temp');
+        try {
+            const d = await fetch('/api/system/info').then(r => r.json());
+
+            if (upEl) upEl.textContent = `SYS ${fmtUptime(d.uptime_seconds)}`;
+
+            if (memEl) {
+                const m = d.mem_used_pct;
+                memEl.textContent = (m == null) ? 'MEM —' : `MEM ${m}%`;
+                memEl.className = 'hud-sys-item' +
+                    (m == null ? '' : m >= 93 ? ' crit' : m >= 85 ? ' warn' : '');
+            }
+
+            if (tempEl) {
+                const t = d.temp_c;
+                tempEl.textContent = (t == null) ? '—' : `${t}°C`;
+                tempEl.className = 'hud-sys-item' +
+                    (t == null ? '' : t >= 85 ? ' crit' : t >= 75 ? ' warn' : '');
+            }
+        } catch(e) {
+            // Advisory only — leave last-known values rather than blanking
+        }
+    }
+    setInterval(updateSysInfo, 15000);
+    updateSysInfo();
+
+    updateStatus();
+    initQueue().then(() => { _playlistLoaded = true; });
+
+    // ── Double-click / double-tap a fader → snap back to 0 dB (unity, 1.0) ──
+    function attachUnityReset(el, fn) {
+        if (!el) return;
+        let lastTap = 0;
+        el.addEventListener('dblclick', fn);
+        el.addEventListener('touchend', () => {
+            const now = Date.now();
+            if (now - lastTap < 350) fn();
+            lastTap = now;
+        });
+        el.title = (el.title ? el.title + ' · ' : '') + 'Double-click/tap: reset to 0 dB';
+    }
+    ['automation', 'live', 'emergency'].forEach(s => {
+        const el = document.getElementById(`trim-${s}`);
+        attachUnityReset(el, () => { el.value = 1.0; setTrim(s, 1.0); });
+    });
+    const _volEl = document.getElementById('vol-slider');
+    attachUnityReset(_volEl, () => { _volEl.value = 1.0; setVolume(1.0); });
+
+    // Operator badge — who is signed in (click for menu: change PIN / log out)
+    let ME = null;
+    fetch('/api/whoami').then(r => r.json()).then(d => {
+        ME = d.user;
+        const el = document.getElementById('header-user');
+        if (el && d.user) el.textContent = `OP: ${d.user.toUpperCase()}`;
+    }).catch(() => {});
+
+    // ── Single-operator lock ────────────────────────────────────────────────
+    // One operator drives the tower at a time. We claim the lock on load, send a
+    // heartbeat so it doesn't auto-release, and if someone else holds it we show
+    // an "in use" modal (Contact / Override). Any write that returns 423 (raced
+    // by another operator) re-opens the modal via the fetch wrapper below.
+    let _locked = false;          // true while the in-use modal/overlay blocks us
+    let _overridden = false;      // true after someone took control from us
+
+    function setControlsLocked(on) {
+        const main = document.querySelector('.page-layout');
+        if (!main) return;
+        main.style.pointerEvents = on ? 'none' : '';
+        main.style.opacity = on ? '0.4' : '';
+    }
+
+    function fmtAgo(ts) {
+        if (!ts) return '';
+        const s = Math.max(0, Math.floor(Date.now() / 1000 - ts));
+        const m = Math.floor(s / 60);
+        return `${m} minute${m === 1 ? '' : 's'} ago`;
+    }
+
+    function showLockModal(holder) {
+        _locked = true;
+        const name = (holder && (holder.name || holder.user)) || 'Another operator';
+        document.getElementById('lock-msg').textContent = `${name} is currently using this machine.`;
+        document.getElementById('lock-since').textContent =
+            holder && holder.since ? `since ${fmtAgo(holder.since)}` : '';
+        const c = document.getElementById('lock-contact');
+        if (holder && holder.email) {
+            const subj = encodeURIComponent('WGXC Tower — can I take over the crossfader app?');
+            c.href = `mailto:${holder.email}?subject=${subj}`;
+            c.textContent = `CONTACT ${String(name).toUpperCase()}`;
+            c.style.display = 'block';
+        } else {
+            c.style.display = 'none';
+        }
+        document.getElementById('lock-overlay').style.display = 'flex';
+        setControlsLocked(true);
+    }
+
+    function hideLockModal() {
+        _locked = false;
+        document.getElementById('lock-overlay').style.display = 'none';
+        setControlsLocked(false);
+    }
+
+    async function claimControl(override) {
+        try {
+            const r = await _origFetch('/api/claim', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({override: !!override})
+            });
+            if (r.status === 423) { showLockModal((await r.json()).holder); return false; }
+            _overridden = false;
+            document.getElementById('takeover-banner').style.display = 'none';
+            hideLockModal();
+            return true;
+        } catch (e) { return false; }
+    }
+
+    function showTakeover(holder) {
+        _overridden = true;
+        const name = (holder && (holder.name || holder.user)) || 'Another operator';
+        document.getElementById('takeover-msg').textContent =
+            `${name} overrode and took control of the tower. Your controls are paused.`;
+        document.getElementById('takeover-banner').style.display = 'block';
+        setControlsLocked(true);
+    }
+
+    async function reclaimControl() {
+        // Force-takes control back (also an audited override).
+        await claimControl(true);
+    }
+    window.reclaimControl = reclaimControl;
+
+    document.getElementById('lock-override').onclick = () => claimControl(true);
+
+    // Intercept any locked write so the modal appears no matter which control raced.
+    const _origFetch = window.fetch.bind(window);
+    window.fetch = async (...args) => {
+        const res = await _origFetch(...args);
+        if (res.status === 423) {
+            try {
+                const url = (typeof args[0] === 'string' ? args[0] : (args[0] && args[0].url)) || '';
+                if (url.includes('/api/')) {
+                    const j = await res.clone().json();
+                    if (j && j.holder) showLockModal(j.holder);
+                }
+            } catch (e) {}
+        }
+        return res;
+    };
+
+    // Claim on load; if held by someone else the modal shows instead.
+    claimControl(false);
+
+    // ── Idle auto-logout ────────────────────────────────────────────────────
+    // Sign out after IDLE_LIMIT_MS with no real user input. "Input" = mouse/key/
+    // touch/scroll — NOT the background poll — so a screen left unattended still
+    // times out. A warning shows in the final minute; any input cancels it. The
+    // heartbeat below only fires while active, so the server's last_active goes
+    // stale on an idle tab and it expires there too (defence in depth).
+    const IDLE_LIMIT_MS = 5 * 60 * 1000;
+    const IDLE_WARN_MS  = 60 * 1000;   // warn this long before logout
+    let _lastActivity = Date.now();
+    let _idleWarnShown = false;
+
+    function markActivity() {
+        _lastActivity = Date.now();
+        if (_idleWarnShown) {
+            _idleWarnShown = false;
+            document.getElementById('idle-banner').style.display = 'none';
+        }
+    }
+    ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'wheel'].forEach(ev =>
+        window.addEventListener(ev, markActivity, { passive: true }));
+    function stayActive() { markActivity(); }
+    window.stayActive = stayActive;
+
+    setInterval(() => {
+        const idle = Date.now() - _lastActivity;
+        if (idle >= IDLE_LIMIT_MS) {
+            window.location.href = '/logout';   // clears session + releases lock
+        } else if (idle >= IDLE_LIMIT_MS - IDLE_WARN_MS) {
+            const secs = Math.ceil((IDLE_LIMIT_MS - idle) / 1000);
+            document.getElementById('idle-msg').textContent =
+                `Signing out for inactivity in ${secs}s`;
+            document.getElementById('idle-banner').style.display = 'block';
+            _idleWarnShown = true;
+        }
+    }, 1000);
+
+    // Heartbeat: keep our lock alive + refresh server idle timer — but only while
+    // there's recent user activity. When idle, we stop beating so the lock frees
+    // and the session ages out. Also detects if we've been overridden.
+    setInterval(async () => {
+        if (_locked || _overridden) return;
+        if (Date.now() - _lastActivity >= IDLE_LIMIT_MS) return; // idle → let it expire
+        try {
+            const r = await _origFetch('/api/heartbeat', {method: 'POST'});
+            if (r.status === 423) showTakeover((await r.json()).holder);
+        } catch (e) {}
+    }, 30000);
+
+    // Release the lock when the tab closes so nobody is needlessly locked out.
+    window.addEventListener('pagehide', () => {
+        try { navigator.sendBeacon('/api/release'); } catch (e) {}
+    });
+
+    function toggleUserMenu(e) {
+        e.stopPropagation();
+        const m = document.getElementById('user-menu');
+        m.style.display = m.style.display === 'none' ? 'block' : 'none';
+    }
+    window.addEventListener('click', () => {
+        const m = document.getElementById('user-menu');
+        if (m) m.style.display = 'none';
+    });
+
+    async function changePin() {
+        document.getElementById('user-menu').style.display = 'none';
+        const cur = prompt('Current PIN:');
+        if (!cur) return;
+        const nw = prompt('New PIN (4-12 digits):');
+        if (!nw) return;
+        if (prompt('Repeat new PIN:') !== nw) { alert('PINs do not match'); return; }
+        try {
+            const r = await fetch('/api/change_pin', {
+                method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({current: cur, new: nw})
+            });
+            const j = await r.json();
+            alert(j.error ? `Failed: ${j.error}` : 'PIN changed ✓');
+        } catch (e) { alert('PIN change failed — network error'); }
+    }
+
+    const player = document.getElementById('player');
+    const streamUrl = `http://${window.location.hostname}:8001/monitor.mp3`;
+    player.src = streamUrl;
+
+    function lufsToOffset(lufs) {
+        return 157 * (1 - (Math.max(-60, Math.min(0, lufs)) + 60) / 60);
+    }
+    function lufsColor(v) {
+        if (v === null) return '#292e42';
+        if (v > -9)  return 'var(--red)';
+        if (v > -16) return 'var(--green)';
+        if (v > -23) return 'var(--orange)';
+        return 'var(--muted)';
+    }
+
+    async function updateStreams() {
+        try {
+            const data = await fetch('/api/streams').then(r => r.json());
+            for (const [mount] of [['automation'],['fmmonitor']]) {
+                const v     = data[mount];
+                const color = lufsColor(v);
+                const arc   = document.getElementById(`arc-${mount}`);
+                const txt   = document.getElementById(`lufs-${mount}`);
+                const dot   = document.getElementById(`dot-${mount}`);
+                arc.setAttribute('stroke-dashoffset', v !== null ? lufsToOffset(v) : 157);
+                arc.setAttribute('stroke', color);
+                txt.textContent = v !== null ? v.toFixed(1) : '—';
+                txt.setAttribute('fill', color);
+                if (dot) dot.classList.toggle('live', v !== null && v > -40);
+            }
+        } catch(e) {}
+    }
+    setInterval(updateStreams, 10000);
+    updateStreams();
+
+    // ── Stream Selector Panel ──
+    let _activeStreamUrl = '';
+
+    async function selectStream(url, label) {
+        _activeStreamUrl = url;
+        _streamSelected = true;
+        if (_cued.has('live')) _cuedAt['live'] = Date.now(); // buffering clock starts now
+        await fetch('/api/stream/url', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({url, label})
+        });
+        if (_cued.has('live') || _bus.live > 0.5) {
+            // Live is already routed or cued — this was just a stream URL change.
+            // Leave routing as-is.
+        } else if (anotherSourceActive('live')) {
+            // Another source is on air — CUE the stream for crossfade instead of
+            // hard-switching it live (which would put two sources on air at once).
+            _bus.live = 0.0;
+            _cued.add('live');
+            _cuedAt['live'] = Date.now();
+            _cueErrors.delete('live');
+            showStreamSelector(true);
+            setBoomboxState('live', 0.0, true);
+            updateCrossfadeButton();
+        } else {
+            // Nothing else on air — go live immediately.
+            await fetch('/api/bus', {
+                method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({source: 'live', level: 1.0})
+            });
+            await fetch('/api/switch', {
+                method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({source: 'live'})
+            });
+            _bus.live = 1.0;
+        }
+        renderStreamSelector();
+    }
+
+    async function refreshStreamSelector() {
+        const listEl = document.getElementById('stream-selector-list');
+        if (!listEl) return;
+        try {
+            const streams = await fetch('/api/wavefarm/streams').then(r => r.json());
+            if (!streams.length) {
+                listEl.innerHTML = '<span style="font-size:10px; color:var(--muted); opacity:0.5;">No streams available</span>';
+                return;
+            }
+            listEl.innerHTML = streams.map(s => {
+                const isActive = s.url === _activeStreamUrl;
+                const lufsColor = s.lufs != null ? (s.lufs > -9 ? 'var(--red)' : s.lufs > -16 ? 'var(--green)' : s.lufs > -23 ? 'var(--orange)' : 'var(--muted)') : 'var(--muted)';
+                const lufsText = s.lufs != null ? `${s.lufs} LUFS` : '-- LUFS';
+                return `<button onclick="selectStream('${s.url}','${s.label}')"
+                    style="background:${isActive ? 'var(--cyan-bg)' : 'rgba(255,255,255,0.03)'};
+                           border:1px solid ${isActive ? 'var(--cyan-border)' : 'var(--border-solid)'};
+                           color:${isActive ? 'var(--cyan)' : 'var(--dim)'};
+                           padding:5px 10px; border-radius:3px; cursor:pointer;
+                           font-family:'JetBrains Mono',monospace; font-size:10px;
+                           display:flex; flex-direction:column; align-items:flex-start; gap:2px; text-align:left;">
+                    <span style="font-weight:700">${s.label}</span>
+                    <span style="font-size:8px; color:${lufsColor}">${lufsText}</span>
+                </button>`;
+            }).join('');
+        } catch(e) {
+            if (listEl) listEl.innerHTML = '<span style="font-size:10px; color:var(--muted); opacity:0.5;">Error loading streams</span>';
+        }
+    }
+
+    function renderStreamSelector() {
+        // Just re-render active state without re-fetching
+        const listEl = document.getElementById('stream-selector-list');
+        if (!listEl) return;
+        listEl.querySelectorAll('button').forEach(btn => {
+            const url = btn.getAttribute('onclick').match(/'([^']+)'/)?.[1];
+            const isActive = url === _activeStreamUrl;
+            btn.style.background = isActive ? 'var(--cyan-bg)' : 'rgba(255,255,255,0.03)';
+            btn.style.borderColor = isActive ? 'var(--cyan-border)' : 'var(--border-solid)';
+            btn.style.color = isActive ? 'var(--cyan)' : 'var(--dim)';
+        });
+    }
+
+    setInterval(refreshStreamSelector, 30000);
+    refreshStreamSelector();
+
+    const canvas    = document.getElementById('visualizer');
+    const ctx       = canvas.getContext('2d');
+    const peakValEl = document.getElementById('peak-val');
+    const rmsValEl  = document.getElementById('rms-val');
+    const fpsEl     = document.getElementById('fps-counter');
+    let audioCtx, analyser, mediaSource;
+    let freqData, timeData;
+    let lastFrameTime = 0, frameCount = 0;
+    let silenceStartTime = null;
+    let loopActive = false;
+
+    new ResizeObserver(entries => {
+        for (const e of entries) {
+            canvas.width  = e.contentRect.width;
+            canvas.height = e.contentRect.height || 100;
+        }
+    }).observe(canvas);
+
+    function initVisualizer() {
+        if (audioCtx) return;
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        freqData = new Uint8Array(analyser.frequencyBinCount);
+        timeData = new Uint8Array(analyser.frequencyBinCount);
+
+        mediaSource = audioCtx.createMediaElementSource(player);
+        mediaSource.connect(analyser);
+        analyser.connect(audioCtx.destination);
+        player.play().catch(e => console.log("Playback wait", e));
+    }
+
+    const tapOverlay   = document.getElementById('tap-overlay');
+    const playCircle   = tapOverlay.querySelector('.play-circle');
+    const playLabelEl  = tapOverlay.querySelector('.play-label');
+    let _monitorActive = false;
+
+    function startMonitor() {
+        if (!audioCtx) initVisualizer();
+        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+        player.play().catch(() => {});
+        tapOverlay.classList.add('hidden');
+        _monitorActive = true;
+    }
+
+    function stopMonitor() {
+        player.pause();
+        if (audioCtx && audioCtx.state === 'running') audioCtx.suspend();
+        playCircle.textContent  = '▶';
+        playLabelEl.textContent = 'Play monitor';
+        tapOverlay.classList.remove('hidden');
+        _monitorActive = false;
+    }
+
+    tapOverlay.addEventListener('click', startMonitor);
+
+    canvas.addEventListener('click', () => {
+        if (_monitorActive) stopMonitor();
+    });
+
+    window.addEventListener('load', () => {
+        requestAnimationFrame(drawIdle);
+    });
+
+    let _isBuffering = false;
+    const STARS = Array.from({length: 20}, (_, i) => {
+        const angle = i * 2.3998;
+        const r     = 0.08 + 0.36 * Math.sqrt(i / 20);
+        return {
+            nx:    0.5 + r * Math.cos(angle),
+            ny:    0.5 + r * Math.sin(angle) * 0.55,
+            size:  0.9 + (i % 4) * 0.7,
+            phase: i * 1.618,
+            speed: 0.5 + (i % 5) * 0.28,
+            color: ['#7aa2f7','#bb9af7','#7dcfff','#c0caf5','#9ece6a'][i % 5]
+        };
+    });
+
+    function drawBuffering(ts) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const W = canvas.width, H = canvas.height;
+        const t = ts / 1000;
+
+        for (const s of STARS) {
+            const bright = 0.25 + 0.75 * (0.5 + 0.5 * Math.sin(t * s.speed + s.phase));
+            const px = s.nx * W;
+            const py = s.ny * H;
+            const r  = s.size * (0.7 + 0.3 * bright);
+
+            const grad = ctx.createRadialGradient(px, py, 0, px, py, r * 5);
+            const alpha = Math.round(bright * 55).toString(16).padStart(2, '0');
+            grad.addColorStop(0, s.color + alpha);
+            grad.addColorStop(1, 'transparent');
+            ctx.beginPath();
+            ctx.arc(px, py, r * 5, 0, Math.PI * 2);
+            ctx.fillStyle = grad;
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.arc(px, py, r, 0, Math.PI * 2);
+            ctx.fillStyle = s.color;
+            ctx.globalAlpha = bright;
+            ctx.fill();
+            ctx.globalAlpha = 1;
+        }
+
+        const pulse = 0.35 + 0.25 * Math.sin(ts / 700);
+        ctx.font = '700 8px "JetBrains Mono", monospace';
+        ctx.fillStyle = `rgba(86,95,137,${pulse})`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText('BUFFERING ···', W / 2, H - 8);
+        ctx.textBaseline = 'alphabetic';
+        peakValEl.textContent = '−inf';
+        rmsValEl.textContent  = '−inf';
+    }
+
+    function drawIdle(ts = 0) {
+        if (analyser && !player.paused && player.readyState >= 2) {
+            loopActive = true;
+            requestAnimationFrame(draw);
+            return;
+        }
+        if (_isBuffering) {
+            drawBuffering(ts);
+            requestAnimationFrame(drawIdle);
+            return;
+        }
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = 'rgba(187,154,247,0.18)';
+        ctx.beginPath();
+        for (let x = 0; x <= canvas.width; x++) {
+            const y = canvas.height / 2 + Math.sin(x / 38 + ts / 3200) * 7;
+            x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+        peakValEl.textContent = '−inf';
+        rmsValEl.textContent  = '−inf';
+        requestAnimationFrame(drawIdle);
+    }
+
+    function draw(ts = 0) {
+        if (!analyser || player.paused) {
+            loopActive = false;
+            requestAnimationFrame(drawIdle);
+            return;
+        }
+        // Safari suspends AudioContext after brief inactivity — resume immediately.
+        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+        requestAnimationFrame(draw);
+
+        frameCount++;
+        if (ts - lastFrameTime >= 1000) {
+            fpsEl.textContent = `${frameCount} FPS`;
+            frameCount = 0;
+            lastFrameTime = ts;
+        }
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        analyser.getByteFrequencyData(freqData);
+        analyser.getByteTimeDomainData(timeData);
+        const bufLen = freqData.length;
+
+        const bw = canvas.width / bufLen;
+        for (let i = 0; i < bufLen; i++) {
+            const bh = (freqData[i] / 255) * canvas.height;
+            ctx.fillStyle = `rgba(122,162,247,${0.06 + (freqData[i]/255)*0.35})`;
+            ctx.fillRect(i * bw, canvas.height - bh, bw - 1, bh);
+        }
+
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = 'rgba(125,207,255,0.85)';
+        ctx.beginPath();
+        const sw = canvas.width / bufLen;
+        let x = 0;
+        for (let i = 0; i < bufLen; i++) {
+            const y = (timeData[i] / 128.0) * (canvas.height / 2);
+            i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+            x += sw;
+        }
+        ctx.lineTo(canvas.width, canvas.height / 2);
+        ctx.stroke();
+
+        let sumSq = 0, peak = 0;
+        for (let i = 0; i < bufLen; i++) {
+            const v = (timeData[i] - 128) / 128;
+            sumSq += v * v;
+            if (Math.abs(v) > peak) peak = Math.abs(v);
+        }
+        const rmsVal = Math.sqrt(sumSq / bufLen);
+        const rmsDb  = rmsVal > 0 ? 20 * Math.log10(rmsVal) : -100;
+        const peakDb = peak > 0 ? 20 * Math.log10(peak) : -100;
+
+        peakValEl.textContent = peakDb > -99 ? `${peakDb.toFixed(1)} dB` : '−inf';
+        rmsValEl.textContent  = rmsDb > -99  ? `${rmsDb.toFixed(1)} dB`  : '−inf';
+        peakValEl.style.color = peakDb > -3 ? 'var(--red)' : (peakDb > -12 ? '#ffaa00' : 'var(--green)');
+
+        const statusEl = document.getElementById('status');
+        const statusLight = document.getElementById('status-light');
+        const isSilent = rmsDb < -60;
+
+        if (isSilent) {
+            if (silenceStartTime === null) silenceStartTime = ts;
+            const silenceDuration = ts - silenceStartTime;
+            if (silenceDuration > 8000 && audioCtx && audioCtx.state === 'running') {
+                statusEl.textContent = 'NO SIGNAL';
+                statusEl.classList.add('silent');
+                statusLight.classList.add('off');
+            }
+        } else {
+            silenceStartTime = null;
+            if (statusEl.classList.contains('silent')) {
+                statusEl.classList.remove('silent');
+                statusEl.textContent = sourceLabel(globalActiveSource);
+                statusEl.className = 'source-name' + (globalActiveSource ? ` source-${globalActiveSource}` : '');
+                statusLight.classList.remove('off');
+            }
+        }
+    }
+
+    requestAnimationFrame(drawIdle);
+</script>
+
+<!-- PWA service worker registration (best-effort; never blocks the UI) -->
+<script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js').catch(() => {});
+        });
+    }
+</script>
+</body>
+</html>

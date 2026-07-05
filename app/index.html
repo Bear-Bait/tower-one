@@ -1,0 +1,1483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WGXC Tower Fallback</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            /* Tokyo Night */
+            --bg:            #1a1b26;
+            --surface:       #16161e;
+            --border-solid:  #292e42;
+            --text:          #c0caf5;
+            --muted:         #565f89;
+            --dim:           #a9b1d6;
+            --purple:        #bb9af7;
+            --purple-bg:     rgba(187,154,247,0.10);
+            --purple-border: rgba(187,154,247,0.35);
+            --cyan:          #7dcfff;
+            --cyan-bg:       rgba(125,207,255,0.10);
+            --cyan-border:   rgba(125,207,255,0.40);
+            --red:           #f7768e;
+            --red-bg:        rgba(247,118,142,0.12);
+            --red-border:    rgba(247,118,142,0.40);
+            --green:         #9ece6a;
+            --blue:          #7aa2f7;
+            --orange:        #ff9e64;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ── Header ── */
+        header {
+            border-bottom: 1px solid var(--border-solid);
+            display: flex;
+            align-items: stretch;
+            height: 44px;
+            flex-shrink: 0;
+        }
+        .header-station {
+            display: flex; align-items: center;
+            padding: 0 18px;
+            font-size: 10px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase;
+            color: var(--dim);
+            border-right: 1px solid var(--border-solid);
+            white-space: nowrap;
+        }
+        .header-title {
+            display: flex; align-items: center;
+            padding: 0 18px; flex: 1;
+            font-size: 10px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase;
+            color: #fff;
+        }
+        .header-status {
+            display: flex; align-items: center;
+            padding: 0 18px; gap: 8px;
+            border-left: 1px solid var(--border-solid);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px; color: var(--dim);
+            white-space: nowrap;
+        }
+        .header-dot {
+            width: 7px; height: 7px; border-radius: 50%;
+            background: var(--muted); flex-shrink: 0; transition: background .3s;
+        }
+        .header-dot.ok   { background: var(--green); }
+        .header-dot.live { background: var(--cyan); animation: pulse 1.2s infinite; }
+        .header-dot.err  { background: var(--red); }
+
+        @keyframes pulse {
+            0%,100% { box-shadow: 0 0 0 0 rgba(125,207,255,.6); }
+            50%      { box-shadow: 0 0 0 5px rgba(125,207,255,0); }
+        }
+        @keyframes pulse-slow {
+            0%,100% { box-shadow: 0 0 0 0 rgba(158,206,106,.4); }
+            50%      { box-shadow: 0 0 0 6px rgba(158,206,106,0); }
+        }
+
+        /* ── 3-column layout ── */
+        .page-layout {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 190px 1fr 190px;
+            max-width: 980px;
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        /* ── Side panels ── */
+        .side-panel {
+            padding: 20px 14px 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            border-right: 1px solid var(--border-solid);
+            position: sticky;
+            top: 0;
+            height: 100vh;
+        }
+        .side-panel.right {
+            border-right: none;
+            border-left: 1px solid var(--border-solid);
+        }
+        .side-label {
+            font-size: 9px; font-weight: 700; letter-spacing: .16em;
+            text-transform: uppercase; color: var(--dim);
+            align-self: stretch; text-align: center;
+        }
+
+        /* LUFS gauge SVG */
+        .lufs-gauge { width: 100%; }
+
+        /* Stream open link (replaces play button) */
+        .side-open-link {
+            display: block;
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border-solid);
+            background: rgba(255,255,255,0.03);
+            color: var(--text);
+            font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+            text-decoration: none; text-align: center;
+            transition: all .15s;
+        }
+        .side-open-link.violet { border-left: 3px solid var(--purple); }
+        .side-open-link.violet:hover { background: var(--purple-bg); color: var(--purple); border-color: var(--purple-border); }
+        .side-open-link.teal   { border-left: 3px solid var(--cyan); }
+        .side-open-link.teal:hover   { background: var(--cyan-bg);   color: var(--cyan);   border-color: var(--cyan-border); }
+
+        .side-stream-link {
+            margin-top: auto;
+            display: flex; align-items: center; gap: 6px;
+            font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+            color: var(--muted); text-decoration: none; transition: color .15s;
+            padding: 8px 0; border-top: 1px solid var(--border-solid);
+            width: 100%; justify-content: center;
+        }
+        .side-stream-link:hover { color: var(--text); }
+        .side-link-dot {
+            width: 6px; height: 6px; border-radius: 50%;
+            background: var(--muted); flex-shrink: 0; transition: background .3s;
+        }
+        .side-link-dot.live { background: var(--green); animation: pulse-slow 2s infinite; }
+
+        /* ── Center main ── */
+        main {
+            padding: 24px 20px 40px;
+            display: flex; flex-direction: column; gap: 0;
+            min-width: 0;
+        }
+
+        /* ── Section blocks ── */
+        .section-head {
+            display: flex; align-items: center; justify-content: space-between;
+            border: 1px solid var(--border-solid); border-bottom: none;
+            padding: 8px 14px; background: var(--surface);
+        }
+        .section-head h2 {
+            font-size: 10px; font-weight: 700; letter-spacing: .16em;
+            text-transform: uppercase; color: var(--text);
+        }
+        .section-head .badge {
+            font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--dim);
+        }
+        .section-body {
+            border: 1px solid var(--border-solid);
+            background: var(--surface);
+            margin-bottom: 20px;
+        }
+
+        /* ── Active source status ── */
+        .source-display {
+            padding: 22px 20px 18px;
+            display: flex; align-items: center; gap: 16px;
+        }
+        .source-dot {
+            width: 12px; height: 12px; border-radius: 50%;
+            background: var(--muted); flex-shrink: 0; transition: background .3s;
+        }
+        .source-dot.live      { background: var(--cyan); animation: pulse 1.2s infinite; }
+        .source-dot.emergency { background: var(--red); }
+        .source-dot.automation { background: var(--purple); }
+        .source-dot.err       { background: var(--red); opacity: .4; }
+
+        .source-name {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 26px; font-weight: 700; letter-spacing: -0.02em;
+            color: #fff; transition: color .3s; line-height: 1;
+        }
+        .source-name.source-live      { color: var(--cyan);   text-shadow: 0 0 24px rgba(125,207,255,.35); }
+        .source-name.source-emergency { color: var(--red);    text-shadow: 0 0 24px rgba(247,118,142,.35); }
+        .source-name.source-automation{ color: var(--purple); text-shadow: 0 0 24px rgba(187,154,247,.35); }
+        .source-name.source-err       { color: var(--muted); font-size: 13px; }
+        
+        .source-name.silent {
+            color: var(--red) !important;
+            text-shadow: 0 0 15px rgba(255,0,0,0.5);
+            animation: flash-red 1s infinite;
+        }
+
+        @keyframes flash-red {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .status-light {
+            display: inline-block;
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+            vertical-align: middle;
+            background: var(--green);
+            box-shadow: 0 0 10px var(--green);
+            transition: all 0.3s;
+        }
+        .status-light.off {
+            background: var(--red);
+            box-shadow: 0 0 10px var(--red);
+        }
+
+        /* ── Music Player ── */
+        .emergency-browser { display: none; border-top: 1px solid var(--border-solid); }
+        .emergency-browser.visible { display: block; }
+
+        /* LCD Display */
+        .mp-display {
+            background: var(--surface);
+            padding: 12px 16px 10px;
+            border-bottom: 1px solid rgba(158,206,106,0.12);
+        }
+        .mp-row1 {
+            display: flex; align-items: center; gap: 10px; margin-bottom: 7px;
+        }
+        .mp-tracknum {
+            font-family: 'JetBrains Mono', monospace; font-size: 9px;
+            color: rgba(158,206,106,0.4); flex-shrink: 0; letter-spacing: .04em; min-width: 38px;
+        }
+        .mp-title-clip { flex: 1; overflow: hidden; }
+        .mp-title {
+            font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700;
+            color: var(--green); white-space: nowrap; display: inline-block;
+            text-shadow: 0 0 8px rgba(158,206,106,0.45);
+        }
+        .mp-title.scroll { animation: mp-scroll 16s linear infinite; }
+        @keyframes mp-scroll {
+            0%,12%  { transform: translateX(0); }
+            88%,100%{ transform: translateX(var(--scroll-dist, -60%)); }
+        }
+        .mp-time {
+            font-family: 'JetBrains Mono', monospace; font-size: 9px;
+            color: rgba(158,206,106,0.45); flex-shrink: 0; letter-spacing: .04em;
+        }
+        .mp-progress-rail {
+            width: 100%; height: 3px; background: rgba(158,206,106,0.12); border-radius: 2px;
+        }
+        .mp-progress-fill {
+            height: 100%; background: var(--green); border-radius: 2px; width: 0%;
+            box-shadow: 0 0 6px rgba(158,206,106,0.4); transition: width 1s linear;
+        }
+
+        /* Controls */
+        .mp-controls {
+            display: flex; align-items: center; gap: 5px;
+            padding: 9px 16px; background: var(--surface);
+            border-bottom: 1px solid var(--border-solid);
+        }
+        .p-btn {
+            background: transparent; border: 1px solid rgba(255,255,255,0.07);
+            color: var(--dim); width: 44px; height: 36px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 16px; cursor: pointer; border-radius: 4px; transition: all .1s;
+            flex-shrink: 0;
+        }
+        .p-btn:hover { background: rgba(255,255,255,0.06); color: var(--text); border-color: rgba(255,255,255,.18); }
+        .p-btn.p-play {
+            width: 52px; background: rgba(158,206,106,0.08);
+            border-color: rgba(158,206,106,0.28); color: var(--green); font-size: 20px;
+        }
+        .p-btn.p-play:hover { background: rgba(158,206,106,0.16); }
+        .p-btn.p-stop {
+            width: 52px; background: rgba(247,118,142,0.08);
+            border-color: rgba(247,118,142,0.28); color: var(--red); font-size: 18px;
+        }
+        .p-btn.p-stop:hover { background: rgba(247,118,142,0.16); }
+        
+        /* ── Mixer ── */
+        .mixer-wrap {
+            display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+            padding: 14px;
+        }
+        .fader-col {
+            display: flex; flex-direction: column; align-items: center; gap: 10px;
+            background: rgba(0,0,0,0.2); padding: 12px 6px; border-radius: 4px;
+            border: 1px solid var(--border-solid);
+        }
+        .fader-label {
+            font-size: 8px; font-weight: 700; letter-spacing: .12em;
+            text-transform: uppercase; color: var(--muted);
+            text-align: center; height: 20px;
+        }
+        .fader-input-wrap {
+            height: 120px; display: flex; align-items: center; justify-content: center;
+            width: 100%; position: relative;
+        }
+        .vertical-fader {
+            -webkit-appearance: none;
+            width: 110px; height: 4px;
+            background: rgba(255,255,255,0.05);
+            transform: rotate(-90deg);
+            cursor: pointer;
+            outline: none;
+        }
+        .vertical-fader::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 28px; height: 16px;
+            background: #444; border: 1px solid #666;
+            border-radius: 2px; box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }
+        .fader-val {
+            font-family: 'JetBrains Mono', monospace; font-size: 9px;
+            color: var(--dim); min-width: 30px; text-align: center;
+        }
+        .fader-col.master {
+            background: var(--purple-bg); border-color: var(--purple-border);
+        }
+        .fader-col.master .vertical-fader::-webkit-slider-thumb {
+            background: var(--purple); border-color: #fff;
+        }
+
+        /* ── Custom Stream ── */
+        .stream-adder {
+            padding: 14px; display: flex; gap: 8px; border-top: 1px solid var(--border-solid);
+        }
+        .stream-input {
+            flex: 1; background: #000; border: 1px solid var(--border-solid);
+            color: #fff; padding: 6px 10px; font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+        }
+        .stream-input::placeholder { color: var(--muted); }
+        .stream-add-btn {
+            background: var(--cyan-bg); border: 1px solid var(--cyan-border);
+            color: var(--cyan); padding: 6px 14px; font-size: 10px; font-weight: 700;
+            text-transform: uppercase; cursor: pointer;
+        }
+        .stream-add-btn:hover { background: var(--cyan); color: #000; }
+
+        .mp-vol {
+            display: none; /* moved to mixer */
+        }
+        .mp-vol-label {
+            font-size: 8px; font-weight: 700; letter-spacing: .12em;
+            text-transform: uppercase; color: var(--muted);
+        }
+        .mp-vol-slider {
+            width: 68px; height: 3px; -webkit-appearance: none;
+            background: rgba(158,206,106,0.12); border-radius: 2px; cursor: pointer;
+        }
+        .mp-vol-slider::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 10px; height: 10px;
+            border-radius: 50%; background: var(--green);
+            box-shadow: 0 0 5px rgba(158,206,106,0.5); cursor: pointer;
+        }
+
+        /* Playlist */
+        .mp-pl-bar {
+            display: flex; align-items: center; gap: 6px;
+            padding: 7px 16px; border-bottom: 1px solid var(--border-solid);
+        }
+        .mp-pl-label {
+            font-size: 8px; font-weight: 700; letter-spacing: .16em;
+            text-transform: uppercase; color: var(--muted); flex: 1;
+        }
+        .mp-pl-btn {
+            padding: 3px 9px; border: 1px solid var(--border-solid);
+            background: transparent; color: var(--dim); font-size: 9px; font-weight: 700;
+            letter-spacing: .08em; text-transform: uppercase; cursor: pointer;
+            border-radius: 2px; transition: all .12s;
+        }
+        .mp-pl-btn:hover { border-color: var(--green); color: var(--green); }
+        .mp-playlist {
+            max-height: 280px; overflow-y: auto;
+            scrollbar-width: thin; scrollbar-color: rgba(158,206,106,.15) transparent;
+        }
+        .pl-item {
+            display: flex; align-items: center; gap: 9px;
+            padding: 7px 16px; cursor: pointer; transition: background .08s;
+            border-bottom: 1px solid rgba(255,255,255,0.025);
+        }
+        .pl-item:last-child { border-bottom: none; }
+        .pl-item:hover { background: rgba(255,255,255,0.04); }
+        .pl-item.active { background: rgba(158,206,106,0.07); border-left: 2px solid var(--green); padding-left: 14px; }
+        .pl-num {
+            font-family: 'JetBrains Mono', monospace; font-size: 9px;
+            color: var(--muted); width: 18px; text-align: right; flex-shrink: 0;
+        }
+        .pl-item.active .pl-num { color: rgba(158,206,106,0.55); }
+        .pl-name {
+            font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--dim);
+            flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .pl-item.active .pl-name { color: var(--green); }
+        .pl-now { font-size: 8px; color: var(--green); flex-shrink: 0; opacity: 0; }
+        .pl-item.active .pl-now { opacity: 1; animation: pulse 1.2s infinite; }
+        .pl-artist {
+            font-family: 'Inter', sans-serif; font-size: 9px; color: var(--muted);
+            flex-shrink: 0; max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .pl-dur {
+            font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--muted);
+            flex-shrink: 0; width: 30px; text-align: right;
+        }
+        .mp-search-wrap { padding: 6px 16px 2px; }
+        .mp-search {
+            width: 100%; box-sizing: border-box;
+            background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+            color: var(--fg); font-family: 'JetBrains Mono', monospace; font-size: 11px;
+            padding: 5px 10px; border-radius: 3px; outline: none;
+        }
+        .mp-search:focus { border-color: var(--green); }
+
+        .updated-at {
+            padding: 8px 20px 12px;
+            font-size: 11px; color: var(--dim);
+            font-family: 'JetBrains Mono', monospace; letter-spacing: .04em;
+            border-top: 1px solid var(--border-solid);
+        }
+
+        /* ── Harbor monitor player ── */
+        .audio-wrap {
+            padding: 14px 20px 16px;
+            display: flex; flex-direction: column; gap: 8px;
+        }
+        .audio-hint {
+            font-size: 9px; font-weight: 700; letter-spacing: .12em;
+            text-transform: uppercase; color: var(--muted);
+        }
+        audio {
+            width: 100%; height: 38px;
+            accent-color: var(--purple);
+            filter: invert(1) hue-rotate(210deg) brightness(1.4) saturate(1.6);
+        }
+
+        /* ── Canvas visualizer ── */
+        #visualizer { width: 100%; height: 100px; background: var(--surface); display: block; }
+        #tap-overlay {
+            position: absolute; inset: 0; z-index: 10;
+            display: flex; align-items: center; justify-content: center;
+            background: rgba(22,22,30,.8); cursor: pointer;
+            font-size: 13px; font-weight: 700; letter-spacing: .12em;
+            color: var(--dim); text-transform: uppercase;
+            transition: opacity .3s;
+        }
+        #tap-overlay:hover { color: var(--fg); }
+        #tap-overlay.hidden { opacity: 0; pointer-events: none; }
+        .meter-row {
+            display: flex; border-top: 1px solid var(--border-solid);
+            padding: 8px 14px; gap: 24px;
+        }
+        .meter-item { display: flex; align-items: center; gap: 8px; }
+        .meter-label {
+            font-size: 9px; font-weight: 700; color: var(--dim);
+            text-transform: uppercase; letter-spacing: .1em;
+        }
+        .meter-val { font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+
+        /* ── Source control buttons ── */
+        .controls-wrap {
+            padding: 14px;
+            display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+        }
+        button { font-family: 'Inter', sans-serif; cursor: pointer; transition: all .15s ease; }
+        button:disabled { opacity: .4; cursor: default; }
+
+        .source-btn {
+            padding: 18px 14px;
+            border: 1px solid var(--border-solid);
+            background: rgba(255,255,255,0.03);
+            color: var(--text);
+            font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+            display: flex; flex-direction: column; align-items: flex-start; gap: 10px;
+        }
+        .source-btn .btn-dot {
+            width: 9px; height: 9px; border-radius: 50%;
+            background: currentColor; opacity: .35; transition: opacity .2s;
+        }
+        .source-btn:hover:not(:disabled) { border-color: rgba(255,255,255,.3); color: #fff; }
+        .source-btn:hover:not(:disabled) .btn-dot { opacity: .8; }
+
+        .btn-automation { border-left: 3px solid var(--purple-border); }
+        .btn-automation:hover:not(:disabled),
+        .btn-automation.active {
+            background: var(--purple-bg); color: var(--purple);
+            border-left-color: var(--purple); border-color: var(--purple-border);
+            box-shadow: inset 0 0 0 1px var(--purple-border);
+        }
+        .btn-automation.active .btn-dot { opacity: 1; }
+
+        .ready-tag {
+            font-size: 8px; font-weight: 700; letter-spacing: .08em;
+            padding: 2px 6px; border-radius: 3px; margin-top: 2px;
+            background: rgba(112,112,168,0.15); color: var(--muted);
+        }
+        .ready-tag.connected { background: rgba(0,255,136,0.15); color: var(--green); }
+        .ready-tag.buffering { background: rgba(255,158,100,0.15); color: var(--orange); }
+
+        .btn-live { border-left: 3px solid var(--cyan-border); }
+        .btn-live:hover:not(:disabled),
+        .btn-live.active {
+            background: var(--cyan-bg); color: var(--cyan);
+            border-left-color: var(--cyan); border-color: var(--cyan-border);
+            box-shadow: inset 0 0 0 1px var(--cyan-border);
+        }
+        .btn-live.active .btn-dot { opacity: 1; animation: pulse 1.2s infinite; }
+
+        .btn-emergency {
+            grid-column: span 2;
+            border-left: 3px solid var(--red-border);
+            flex-direction: row; align-items: center; justify-content: space-between;
+        }
+        .btn-emergency:hover:not(:disabled),
+        .btn-emergency.active {
+            background: var(--red-bg); color: var(--red);
+            border-left-color: var(--red); border-color: var(--red-border);
+            box-shadow: inset 0 0 0 1px var(--red-border);
+        }
+        .btn-emergency .btn-dot { background: var(--red); opacity: .5; }
+        .btn-emergency.active .btn-dot { opacity: 1; }
+
+        /* ── Local Audio confirm ── */
+        .confirm-bar {
+            display: none; grid-column: span 2;
+            border: 1px solid var(--red-border);
+            background: var(--red-bg);
+            padding: 14px 16px;
+        }
+        .confirm-bar.visible { display: block; }
+        .confirm-question {
+            font-size: 10px; font-weight: 700; letter-spacing: .1em;
+            text-transform: uppercase; color: var(--red); margin-bottom: 10px;
+        }
+        .confirm-question span { font-family: 'JetBrains Mono', monospace; }
+        .confirm-actions { display: flex; gap: 8px; }
+        .btn-confirm-yes {
+            background: var(--red); border: none; color: #fff;
+            padding: 7px 16px; font-size: 10px; font-weight: 700;
+            letter-spacing: .1em; text-transform: uppercase; cursor: pointer;
+        }
+        .btn-confirm-yes:hover { background: #c45070; }
+        .btn-confirm-no {
+            background: transparent; border: 1px solid var(--border-solid);
+            color: var(--dim); padding: 7px 14px;
+            font-size: 10px; font-weight: 700; letter-spacing: .1em;
+            text-transform: uppercase; cursor: pointer;
+        }
+        .btn-confirm-no:hover { border-color: rgba(255,255,255,.3); color: #fff; }
+
+        /* ── Footer ── */
+        footer {
+            border-top: 1px solid var(--border-solid);
+            padding: 10px 18px;
+            font-size: 10px; color: var(--dim);
+            font-family: 'JetBrains Mono', monospace; letter-spacing: .06em;
+            display: flex; justify-content: space-between;
+        }
+
+        /* ── Mobile ── */
+        @media (max-width: 760px) {
+            .page-layout { grid-template-columns: 1fr; }
+            .side-panel { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="header-station">WGXC 90.7 FM</div>
+    <div class="header-title">Tower Fallback Control</div>
+    <div class="header-status">
+        <div class="header-dot" id="header-dot"></div>
+        <span id="header-src">—</span>
+    </div>
+</header>
+
+<div class="page-layout">
+
+    <!-- ── LEFT: Automation ── -->
+    <div class="side-panel left">
+        <div class="side-label">Automation</div>
+
+        <svg class="lufs-gauge" viewBox="0 0 120 72">
+            <path d="M10,66 A50,50 0 0,1 110,66" fill="none" stroke="#16161e" stroke-width="10" stroke-linecap="round"/>
+            <path d="M10,66 A50,50 0 0,1 110,66" fill="none" stroke="var(--purple)" stroke-width="10" stroke-linecap="round"
+                  stroke-dasharray="157" stroke-dashoffset="157" id="arc-automation"
+                  style="transition:stroke-dashoffset .6s,stroke .4s; filter:drop-shadow(0 0 4px var(--purple))"/>
+            <text x="60" y="57" text-anchor="middle" font-family="JetBrains Mono,monospace"
+                  font-size="15" font-weight="700" fill="white" id="lufs-automation">—</text>
+            <text x="60" y="68" text-anchor="middle" font-family="Inter,sans-serif"
+                  font-size="7" fill="#f7768e">LUFS</text>
+        </svg>
+
+        <a class="side-open-link violet" href="https://audio.wavefarm.org/automation.mp3" target="_blank">▶ Open Stream</a>
+
+        <a class="side-stream-link" href="https://audio.wavefarm.org/automation.mp3" target="_blank">
+            <div class="side-link-dot" id="dot-automation"></div>
+            automation.mp3
+        </a>
+    </div>
+
+    <!-- ── CENTER ── -->
+    <main>
+
+        <!-- Active source -->
+        <div class="section-head">
+            <h2>Active Source</h2>
+            <span class="badge" id="badge-time">—</span>
+        </div>
+        <div class="section-body">
+            <div class="source-display">
+                <span id="status-light" class="status-light"></span>
+                <div class="source-dot" id="source-dot"></div>
+                <div class="source-name" id="status">–</div>
+            </div>
+            <div class="updated-at" id="updated-at-detail">Connecting…</div>
+        </div>
+
+        <!-- Harbor monitor -->
+        <div class="section-head">
+            <h2>Tower Monitor</h2>
+        </div>
+        <div class="section-body">
+            <div class="audio-wrap">
+                <div class="audio-hint">Local tower output — plays on your device</div>
+                <audio id="player" crossorigin="anonymous" controls>
+                    Your browser does not support audio.
+                </audio>
+            </div>
+        </div>
+
+        <!-- Mixer -->
+        <div class="section-head">
+            <h2>Mixer</h2>
+        </div>
+        <div class="section-body">
+            <div class="mixer-wrap">
+                <div class="fader-col">
+                    <span class="fader-label">Autom.</span>
+                    <div class="fader-input-wrap">
+                        <input type="range" class="vertical-fader" id="gain-automation" min="0" max="1.5" step="0.01" value="1.0" oninput="setGain('automation', this.value)">
+                    </div>
+                    <span class="fader-val" id="gain-val-automation">1.0</span>
+                </div>
+                <div class="fader-col">
+                    <span class="fader-label">Live</span>
+                    <div class="fader-input-wrap">
+                        <input type="range" class="vertical-fader" id="gain-live" min="0" max="1.5" step="0.01" value="1.0" oninput="setGain('live', this.value)">
+                    </div>
+                    <span class="fader-val" id="gain-val-live">1.0</span>
+                </div>
+                <div class="fader-col">
+                    <span class="fader-label">Local</span>
+                    <div class="fader-input-wrap">
+                        <input type="range" class="vertical-fader" id="gain-emergency" min="0" max="1.5" step="0.01" value="1.0" oninput="setGain('emergency', this.value)">
+                    </div>
+                    <span class="fader-val" id="gain-val-emergency">1.0</span>
+                </div>
+                <div class="fader-col master">
+                    <span class="fader-label">Master</span>
+                    <div class="fader-input-wrap">
+                        <input type="range" class="vertical-fader" id="vol-slider" min="0" max="1.0" step="0.01" value="1.0" oninput="setVolume(this.value)">
+                    </div>
+                    <span class="fader-val" id="vol-val">1.0</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Visualizer -->
+        <div class="section-head">
+            <h2>Waveform</h2>
+            <span class="badge" id="fps-counter">—</span>
+        </div>
+        <div class="section-body">
+            <div style="position:relative">
+                <canvas id="visualizer"></canvas>
+                <div id="tap-overlay">▶ tap to start monitor</div>
+            </div>
+            <div class="meter-row">
+                <div class="meter-item">
+                    <span class="meter-label">Peak</span>
+                    <span class="meter-val" id="peak-val" style="color:var(--green)">−inf</span>
+                </div>
+                <div class="meter-item">
+                    <span class="meter-label">RMS</span>
+                    <span class="meter-val" id="rms-val" style="color:var(--cyan)">−inf</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Source control -->
+        <div class="section-head">
+            <h2>Source Control</h2>
+        </div>
+        <div class="section-body">
+            <div class="controls-wrap">
+                <button class="source-btn btn-automation" id="btn-automation" onclick="switchSource('automation')">
+                    <div class="btn-dot"></div>Automation
+                    <span class="ready-tag" id="ready-automation">--</span>
+                </button>
+                <button class="source-btn btn-live" id="btn-live" onclick="switchSource('live')">
+                    <div class="btn-dot"></div>Live Stream
+                    <span class="ready-tag" id="ready-live">--</span>
+                </button>
+                <button class="source-btn btn-emergency" id="btn-emergency" onclick="confirmEmergency()">
+                    <div class="btn-dot" style="margin-right:0"></div>
+                    Local Audio
+                    <span class="ready-tag" id="ready-emergency">--</span>
+                </button>
+                <div class="confirm-bar" id="confirm-bar">
+                    <div class="confirm-question">Switch to <span>LOCAL AUDIO</span>?</div>
+                    <div class="confirm-actions">
+                        <button class="btn-confirm-yes" onclick="switchSource('emergency');hideConfirm()">Confirm</button>
+                        <button class="btn-confirm-no" onclick="hideConfirm()">Cancel</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Custom Stream / Dropdown -->
+            <div class="stream-adder">
+                <input type="text" class="stream-input" id="custom-stream-url" placeholder="Paste Icecast Stream URL...">
+                <button class="stream-add-btn" onclick="addCustomStream()">Switch to URL</button>
+            </div>
+            <div class="stream-adder" style="border-top:none; padding-top:0;">
+                <select class="stream-input" id="wf-streams-dropdown" onchange="selectWFStream(this.value)">
+                    <option value="">— Select Wave Farm Stream —</option>
+                    <option value="http://audio.wavefarm.org/automation.mp3">Automation</option>
+                    <option value="http://audio.wavefarm.org/live.mp3">Live</option>
+                    <option value="http://audio.wavefarm.org/fmmonitor.mp3">FM Monitor</option>
+                </select>
+                <button class="stream-add-btn" onclick="loadWFStreams()">↺</button>
+            </div>
+
+            <!-- Music Player (shown when Emergency source is active) -->
+            <div class="emergency-browser" id="emergency-browser">
+
+                <!-- LCD display -->
+                <div class="mp-display">
+                    <div class="mp-row1">
+                        <span class="mp-tracknum" id="mp-tracknum">— / —</span>
+                        <div class="mp-title-clip">
+                            <span class="mp-title" id="mp-title">NO TRACK LOADED</span>
+                        </div>
+                        <span class="mp-time" id="mp-time">0:00 / 0:00</span>
+                    </div>
+                    <div class="mp-progress-rail">
+                        <div class="mp-progress-fill" id="mp-progress"></div>
+                    </div>
+                </div>
+
+                <!-- Controls -->
+                <div class="mp-controls">
+                    <button class="p-btn" onclick="playerPrev()" title="Prev">⏮</button>
+                    <button class="p-btn p-play" onclick="playerPlay()" title="Play">▶</button>
+                    <button class="p-btn p-stop" onclick="playerStop()" title="Stop Broadcast">■</button>
+                    <button class="p-btn" onclick="playerNext()" title="Next">⏭</button>
+                    <div class="mp-vol" style="display:flex; margin-left:auto; gap: 8px; align-items:center;">
+                         <span class="mp-vol-label">Master</span>
+                         <span class="fader-val" id="vol-display-small">1.0</span>
+                    </div>
+                </div>
+
+                <!-- Playlist toolbar -->
+                <div class="mp-pl-bar">
+                    <span class="mp-pl-label">Library &nbsp;<span id="mp-count" style="opacity:.5">0 tracks</span></span>
+                    <button class="mp-pl-btn" onclick="shufflePlaylist()" title="Shuffle">⇄</button>
+                    <button class="mp-pl-btn" onclick="loadPlaylist()">↺</button>
+                    <label class="mp-pl-btn" for="mp-file-input">+ Add</label>
+                    <input type="file" id="mp-file-input" style="display:none"
+                           accept=".mp3,.wav,.ogg,.flac" onchange="uploadTrack(this)">
+                </div>
+                <!-- Search -->
+                <div class="mp-search-wrap">
+                    <input type="text" class="mp-search" id="mp-search"
+                           placeholder="Search title or artist…" oninput="filterPlaylist(this.value)">
+                </div>
+
+                <!-- Playlist -->
+                <div class="mp-playlist" id="mp-playlist">
+                    <div class="pl-item" style="color:var(--muted);cursor:default;justify-content:center">
+                        Loading…
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </main>
+
+    <!-- ── RIGHT: FM Monitor ── -->
+    <div class="side-panel right">
+        <div class="side-label">FM Monitor</div>
+
+        <svg class="lufs-gauge" viewBox="0 0 120 72">
+            <path d="M10,66 A50,50 0 0,1 110,66" fill="none" stroke="#16161e" stroke-width="10" stroke-linecap="round"/>
+            <path d="M10,66 A50,50 0 0,1 110,66" fill="none" stroke="var(--cyan)" stroke-width="10" stroke-linecap="round"
+                  stroke-dasharray="157" stroke-dashoffset="157" id="arc-fmmonitor"
+                  style="transition:stroke-dashoffset .6s,stroke .4s; filter:drop-shadow(0 0 4px var(--cyan))"/>
+            <text x="60" y="57" text-anchor="middle" font-family="JetBrains Mono,monospace"
+                  font-size="15" font-weight="700" fill="white" id="lufs-fmmonitor">—</text>
+            <text x="60" y="68" text-anchor="middle" font-family="Inter,sans-serif"
+                  font-size="7" fill="#f7768e">LUFS</text>
+        </svg>
+
+        <a class="side-open-link teal" href="https://audio.wavefarm.org/fmmonitor.mp3" target="_blank">▶ Open Stream</a>
+
+        <a class="side-stream-link" href="https://audio.wavefarm.org/fmmonitor.mp3" target="_blank">
+            <div class="side-link-dot" id="dot-fmmonitor"></div>
+            fmmonitor.mp3
+        </a>
+    </div>
+
+</div><!-- end .page-layout -->
+
+<footer>
+    <span>wgxc-tower-fallback</span>
+    <span>tower-two</span>
+</footer>
+
+<script>
+    // ── Source control ──
+    function confirmEmergency() {
+        document.getElementById('confirm-bar').classList.add('visible');
+        document.getElementById('btn-emergency').disabled = true;
+    }
+    function hideConfirm() {
+        document.getElementById('confirm-bar').classList.remove('visible');
+        document.getElementById('btn-emergency').disabled = false;
+    }
+
+    let _playlistLoaded = false;
+    function setActiveButton(src) {
+        ['automation','live','emergency'].forEach(s =>
+            document.getElementById(`btn-${s}`).classList.toggle('active', s === src));
+        const browser = document.getElementById('emergency-browser');
+        if (src === 'emergency') {
+            browser.classList.add('visible');
+            if (!_playlistLoaded) { _playlistLoaded = true; loadPlaylist(); }
+        } else {
+            browser.classList.remove('visible');
+            _playlistLoaded = false;
+        }
+    }
+
+    // ── Music Player ──
+    let playlist  = [];
+    let playerIdx = -1;
+
+    function cleanTitle(filename) {
+        return filename
+            .replace(/\.[^/.]+$/, '')       // strip extension
+            .replace(/^\d+[\s._\-]+/, '')   // strip leading track number
+            .trim() || filename;
+    }
+    function fmtTime(s) {
+        if (!s || isNaN(s)) return '0:00';
+        return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
+    }
+
+    let _allTracks = [];
+
+    async function loadPlaylist() {
+        const el = document.getElementById('mp-playlist');
+        el.innerHTML = '<div class="pl-item" style="color:var(--muted);cursor:default;justify-content:center">Loading…</div>';
+        try {
+            const data = await fetch('/api/music/files').then(r => r.json());
+            _allTracks = data.tracks || [];
+            playlist = [..._allTracks];
+            document.getElementById('mp-count').textContent = `${_allTracks.length} track${_allTracks.length !== 1 ? 's' : ''}`;
+            renderPlaylist();
+        } catch(e) {
+            el.innerHTML = '<div class="pl-item" style="color:var(--red);cursor:default">Error loading files</div>';
+        }
+    }
+
+    function filterPlaylist(q) {
+        const query = q.toLowerCase().trim();
+        playlist = query
+            ? _allTracks.filter(t =>
+                t.title.toLowerCase().includes(query) ||
+                t.artist.toLowerCase().includes(query))
+            : [..._allTracks];
+        playerIdx = -1;
+        renderPlaylist();
+    }
+
+    function shufflePlaylist() {
+        for (let i = playlist.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [playlist[i], playlist[j]] = [playlist[j], playlist[i]];
+        }
+        playerIdx = -1;
+        renderPlaylist();
+    }
+
+    function escHtml(s) {
+        return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function renderPlaylist() {
+        const el = document.getElementById('mp-playlist');
+        if (!playlist.length) {
+            const q = document.getElementById('mp-search')?.value;
+            el.innerHTML = q
+                ? '<div class="pl-item" style="color:var(--muted);cursor:default;padding:14px 16px">No results</div>'
+                : '<div class="pl-item" style="color:var(--muted);cursor:default;padding:14px 16px">No files — use + Add to upload</div>';
+            return;
+        }
+        el.innerHTML = playlist.map((t, i) => `
+            <div class="pl-item${i === playerIdx ? ' active' : ''}" id="pli-${i}" onclick="playerSelect(${i})">
+                <span class="pl-num">${String(i+1).padStart(2,'0')}</span>
+                <span class="pl-name">${escHtml(t.title)}</span>
+                <span class="pl-artist">${escHtml(t.artist)}</span>
+                <span class="pl-dur">${t.duration_display || ''}</span>
+                <span class="pl-now">▶</span>
+            </div>`).join('');
+        updateDisplay();
+        const active = document.getElementById(`pli-${playerIdx}`);
+        if (active) active.scrollIntoView({block:'nearest'});
+    }
+
+    function updateDisplay() {
+        const titleEl = document.getElementById('mp-title');
+        const numEl   = document.getElementById('mp-tracknum');
+        if (playerIdx < 0 || !playlist[playerIdx]) {
+            titleEl.textContent = 'NO TRACK LOADED';
+            titleEl.classList.remove('scroll');
+            numEl.textContent = '— / —';
+            return;
+        }
+        const track = playlist[playerIdx];
+        const title = track.title || cleanTitle(track.filename || String(track));
+        titleEl.textContent = title;
+        numEl.textContent = `${playerIdx+1} / ${playlist.length}`;
+        // Scroll long titles
+        if (title.length > 28) {
+            titleEl.classList.add('scroll');
+            titleEl.style.setProperty('--scroll-dist', `-${Math.min(80, (title.length - 28) * 2.5)}%`);
+        } else {
+            titleEl.classList.remove('scroll');
+        }
+    }
+
+    async function playerSelect(idx) {
+        playerIdx = idx;
+        _trackStart = Date.now();
+        renderPlaylist();
+        // Optimistic: switch source immediately if not emergency
+        if (globalActiveSource !== 'emergency') {
+            await switchSource('emergency');
+        }
+        await fetch('/api/music/play', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({filename: (playlist[idx].filename || playlist[idx])})
+        });
+    }
+
+    async function playerPlay() {
+        if (playerIdx < 0 && playlist.length) playerSelect(0);
+        else if (playerIdx >= 0)              playerSelect(playerIdx);
+    }
+    function playerPrev() {
+        if (!playlist.length) return;
+        playerSelect(playerIdx <= 0 ? playlist.length - 1 : playerIdx - 1);
+    }
+    function playerNext() {
+        if (!playlist.length) return;
+        playerSelect(playerIdx >= playlist.length - 1 ? 0 : playerIdx + 1);
+    }
+    async function playerStop() {
+        await fetch('/api/music/stop', { method: 'POST' });
+        updateStatus();
+    }
+
+    async function setVolume(val) {
+        document.getElementById('vol-val').textContent = parseFloat(val).toFixed(2);
+        document.getElementById('vol-display-small').textContent = parseFloat(val).toFixed(2);
+        await fetch('/api/volume', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({level: parseFloat(val)})
+        });
+    }
+
+    async function setGain(source, val) {
+        document.getElementById(`gain-val-${source}`).textContent = parseFloat(val).toFixed(2);
+        await fetch('/api/gain', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({source, level: parseFloat(val)})
+        });
+    }
+
+    async function uploadTrack(input) {
+        if (!input.files || !input.files[0]) return;
+        const label = input.previousElementSibling; // the <label>
+        const form  = new FormData();
+        form.append('file', input.files[0]);
+        label.textContent = 'Uploading…';
+        try {
+            const res = await fetch('/api/music/upload', {method:'POST', body: form}).then(r=>r.json());
+            label.textContent = res.result === 'success' ? `✓ ${res.filename}` : 'Failed';
+            if (res.result === 'success') loadPlaylist();
+        } catch(e) { label.textContent = 'Error'; }
+        input.value = '';
+        setTimeout(() => { label.textContent = '+ Add'; }, 2500);
+    }
+
+    async function addCustomStream() {
+        const url = document.getElementById('custom-stream-url').value;
+        if (!url) return;
+        // For now we assume if it's "automation.mp3" or "live.mp3" we switch directly.
+        // Liquidsoap doesn't support adding sources dynamically easily.
+        if (url.includes('automation.mp3')) switchSource('automation');
+        else if (url.includes('live.mp3')) switchSource('live');
+        else {
+            alert('Custom arbitrary streams are not yet fully implemented. Try a known Wave Farm stream.');
+        }
+    }
+
+    async function selectWFStream(url) {
+        if (!url) return;
+        if (url.includes('automation.mp3')) switchSource('automation');
+        else if (url.includes('live.mp3')) switchSource('live');
+        else {
+            // we'll need a way in liquidsoap to update the URL of a stream source
+            // For now, let's just use it as a URL picker for the input field
+            document.getElementById('custom-stream-url').value = url;
+        }
+    }
+
+    async function loadWFStreams() {
+        try {
+            const data = await fetch('/api/wavefarm/streams').then(r => r.json());
+            const drop = document.getElementById('wf-streams-dropdown');
+            // preserve the first item
+            drop.innerHTML = '<option value="">— Select Wave Farm Stream —</option>';
+            data.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.url;
+                opt.textContent = `${s.label} (${s.lufs ? s.lufs : '??'} LUFS)`;
+                drop.appendChild(opt);
+            });
+        } catch(e) { console.error("Error loading streams", e); }
+    }
+
+    let globalActiveSource = '';
+
+    function sourceLabel(src) {
+        if (src === 'emergency') return 'LOCAL AUDIO';
+        if (src === 'automation') return 'AUTOMATION';
+        if (src === 'live') return 'LIVE';
+        return src ? src.toUpperCase() : '–';
+    }
+
+    async function updateStatus() {
+        const statusEl  = document.getElementById('status');
+        const srcDot    = document.getElementById('source-dot');
+        const headerDot = document.getElementById('header-dot');
+        const headerSrc = document.getElementById('header-src');
+        const detail    = document.getElementById('updated-at-detail');
+        const badge     = document.getElementById('badge-time');
+        const statusLight = document.getElementById('status-light');
+
+        try {
+            const data = await fetch('/api/status').then(r => r.json());
+            const src  = (data.selected || '').trim().toLowerCase();
+            globalActiveSource = src;
+            
+            // Only update text if not silent (handled by draw loop)
+            if (!statusEl.classList.contains('silent')) {
+                statusEl.textContent = sourceLabel(src);
+                statusEl.className   = 'source-name' + (src ? ` source-${src}` : '');
+                statusLight.classList.remove('off');
+            }
+
+            srcDot.className     = 'source-dot' + (src ? ` ${src}` : '');
+            headerDot.className  = 'header-dot' + (src === 'live' ? ' live' : src === 'emergency' ? ' err' : ' ok');
+            headerSrc.textContent = sourceLabel(src);
+            setActiveButton(src);
+            const t = new Date().toLocaleTimeString();
+            badge.textContent  = t;
+            detail.textContent = `Updated ${t}`;
+
+            // Sync volume slider
+            if (data.volume) {
+                const vs = document.getElementById('vol-slider');
+                if (vs && document.activeElement !== vs) {
+                    vs.value = parseFloat(data.volume);
+                    document.getElementById('vol-val').textContent = parseFloat(data.volume).toFixed(2);
+                    document.getElementById('vol-display-small').textContent = parseFloat(data.volume).toFixed(2);
+                }
+            }
+            
+            // Sync gains from the combined data (skip during crossfade to avoid jitter)
+            if (data.gains && !_crossfading) {
+                ['automation','live','emergency'].forEach(s => {
+                    const gs = document.getElementById(`gain-${s}`);
+                    const val = data.gains[s];
+                    if (gs && document.activeElement !== gs && val && !val.includes('Error')) {
+                        gs.value = parseFloat(val);
+                        document.getElementById(`gain-val-${s}`).textContent = parseFloat(val).toFixed(2);
+                    }
+                });
+            }
+
+            // Sync readiness indicators + buffering star animation trigger
+            if (data.ready) {
+                ['automation','live','emergency'].forEach(s => {
+                    const el = document.getElementById(`ready-${s}`);
+                    if (!el) return;
+                    const isReady = data.ready[s];
+                    el.textContent = isReady ? 'CONNECTED' : 'BUFFERING';
+                    el.className = 'ready-tag ' + (isReady ? 'connected' : 'buffering');
+                });
+                // Show star cluster if active source is still buffering
+                const activeSrc = (data.selected || '').trim().toLowerCase();
+                _isBuffering = activeSrc && data.ready[activeSrc] === false;
+            }
+
+        } catch(e) {
+            statusEl.textContent = 'OFFLINE';
+            statusEl.className   = 'source-name source-err';
+            srcDot.className     = 'source-dot err';
+            headerDot.className  = 'header-dot err';
+            headerSrc.textContent = 'offline';
+            detail.textContent   = 'Cannot reach Liquidsoap';
+        }
+    }
+
+    let _crossfading = false;
+
+    async function switchSource(source) {
+        // Optimistic UI — update instantly, don't wait for server
+        setActiveButton(source);
+        const statusEl = document.getElementById('status');
+        if (!statusEl.classList.contains('silent')) {
+            statusEl.textContent = sourceLabel(source);
+            statusEl.className = `source-name source-${source}`;
+        }
+
+        // Tell the server which source is "selected" (for status reporting)
+        fetch('/api/switch', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({source})
+        });
+
+        // Crossfade: ramp old source(s) down, new source up over ~3 seconds
+        if (_crossfading) return; // don't overlap crossfades
+        _crossfading = true;
+
+        const sources = ['automation', 'live', 'emergency'];
+        const steps = 10;
+        const interval = 300; // 300ms × 10 = 3 seconds total
+
+        for (let i = 1; i <= steps; i++) {
+            const t = i / steps; // 0.1 → 1.0
+            for (const s of sources) {
+                const target = (s === source) ? t : (1.0 - t);
+                const clamped = Math.max(0, Math.min(1.0, target));
+                fetch('/api/gain', {
+                    method: 'POST', headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({source: s, level: parseFloat(clamped.toFixed(2))})
+                });
+            }
+            if (i < steps) await new Promise(r => setTimeout(r, interval));
+        }
+
+        globalActiveSource = source;
+        _crossfading = false;
+    }
+
+    // Client-side progress timer (ticks every second while a track is playing)
+    let _trackStart = 0;
+    function tickProgress() {
+        if (playerIdx < 0 || globalActiveSource !== 'emergency') return;
+        const elapsed = (Date.now() - _trackStart) / 1000;
+        document.getElementById('mp-time').textContent = fmtTime(elapsed);
+        document.getElementById('mp-progress').style.width =
+            Math.min(100, (elapsed / 240) * 100) + '%'; // 240s = 4min default width
+    }
+    setInterval(tickProgress, 1000);
+
+    setInterval(updateStatus, 1000);
+
+    // On load: snap gains to match selected source so a mid-crossfade refresh
+    // never leaves gains stuck at partial values.
+    (async () => {
+        try {
+            const d = await fetch('/api/status').then(r => r.json());
+            const src = (d.selected || 'automation').trim().toLowerCase();
+            if (['automation','live','emergency'].includes(src)) {
+                await fetch('/api/hardswitch', {
+                    method: 'POST', headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({source: src})
+                });
+            }
+        } catch(e) {}
+        updateStatus();
+    })();
+
+    loadWFStreams();
+    setInterval(loadWFStreams, 30000);
+
+    // ── Harbor monitor player ──
+    const player = document.getElementById('player');
+    const streamUrl = `http://${window.location.hostname}:8001/monitor.mp3`;
+    player.src = streamUrl;
+
+
+    // ── LUFS gauges ──
+    function lufsToOffset(lufs) {
+        return 157 * (1 - (Math.max(-60, Math.min(0, lufs)) + 60) / 60);
+    }
+    function lufsColor(v) {
+        if (v === null) return '#292e42';
+        if (v > -9)  return 'var(--red)';
+        if (v > -16) return 'var(--green)';
+        if (v > -23) return 'var(--orange)';
+        return 'var(--muted)';
+    }
+
+    async function updateStreams() {
+        try {
+            const data = await fetch('/api/streams').then(r => r.json());
+            for (const [mount] of [['automation'],['fmmonitor']]) {
+                const v     = data[mount];
+                const color = lufsColor(v);
+                const arc   = document.getElementById(`arc-${mount}`);
+                const txt   = document.getElementById(`lufs-${mount}`);
+                const dot   = document.getElementById(`dot-${mount}`);
+                arc.setAttribute('stroke-dashoffset', v !== null ? lufsToOffset(v) : 157);
+                arc.setAttribute('stroke', color);
+                txt.textContent = v !== null ? v.toFixed(1) : '—';
+                txt.setAttribute('fill', color);
+                if (dot) dot.classList.toggle('live', v !== null && v > -40);
+            }
+        } catch(e) {}
+    }
+    setInterval(updateStreams, 10000);
+    updateStreams();
+
+    // ── Visualizer (always on) ──
+    const canvas    = document.getElementById('visualizer');
+    const ctx       = canvas.getContext('2d');
+    const peakValEl = document.getElementById('peak-val');
+    const rmsValEl  = document.getElementById('rms-val');
+    const fpsEl     = document.getElementById('fps-counter');
+    let audioCtx, analyser, mediaSource;
+    let freqData, timeData;          // allocated once in initVisualizer
+    let lastFrameTime = 0, frameCount = 0;
+    let silenceStartTime = null;
+    let loopActive = false;          // true = 60fps draw() running, false = 10fps drawIdle()
+
+    // Resize canvas without polling getBoundingClientRect every frame
+    new ResizeObserver(entries => {
+        for (const e of entries) {
+            canvas.width  = e.contentRect.width;
+            canvas.height = e.contentRect.height || 100;
+        }
+    }).observe(canvas);
+
+    function initVisualizer() {
+        if (audioCtx) return;
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        freqData = new Uint8Array(analyser.frequencyBinCount);
+        timeData = new Uint8Array(analyser.frequencyBinCount);
+
+        mediaSource = audioCtx.createMediaElementSource(player);
+        mediaSource.connect(analyser);
+        analyser.connect(audioCtx.destination);
+        player.play().catch(e => console.log("Playback wait", e));
+    }
+
+    // Single click handler: resume AudioContext and ensure player is running
+    const tapOverlay = document.getElementById('tap-overlay');
+
+    document.addEventListener('click', () => {
+        // Dismiss overlay on first interaction
+        tapOverlay.classList.add('hidden');
+        if (!audioCtx) initVisualizer();
+        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+        player.play().catch(() => {});
+    }, {once: false});
+
+    window.addEventListener('load', () => {
+        // Don't call initVisualizer() here — play() will be blocked without a user gesture.
+        // The overlay prompts the first click which starts everything.
+        requestAnimationFrame(drawIdle);
+    });
+
+    // Star cluster for buffering state — fixed positions, independent twinkle phases
+    let _isBuffering = false;
+    const STARS = Array.from({length: 20}, (_, i) => {
+        const angle = i * 2.3998; // golden angle spiral
+        const r     = 0.08 + 0.36 * Math.sqrt(i / 20);
+        return {
+            nx:    0.5 + r * Math.cos(angle),
+            ny:    0.5 + r * Math.sin(angle) * 0.55, // flatten vertically
+            size:  0.9 + (i % 4) * 0.7,
+            phase: i * 1.618,
+            speed: 0.5 + (i % 5) * 0.28,
+            color: ['#7aa2f7','#bb9af7','#7dcfff','#c0caf5','#9ece6a'][i % 5]
+        };
+    });
+
+    function drawBuffering(ts) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const W = canvas.width, H = canvas.height;
+        const t = ts / 1000;
+
+        for (const s of STARS) {
+            const bright = 0.25 + 0.75 * (0.5 + 0.5 * Math.sin(t * s.speed + s.phase));
+            const px = s.nx * W;
+            const py = s.ny * H;
+            const r  = s.size * (0.7 + 0.3 * bright);
+
+            // Glow halo
+            const grad = ctx.createRadialGradient(px, py, 0, px, py, r * 5);
+            const alpha = Math.round(bright * 55).toString(16).padStart(2, '0');
+            grad.addColorStop(0, s.color + alpha);
+            grad.addColorStop(1, 'transparent');
+            ctx.beginPath();
+            ctx.arc(px, py, r * 5, 0, Math.PI * 2);
+            ctx.fillStyle = grad;
+            ctx.fill();
+
+            // Star core
+            ctx.beginPath();
+            ctx.arc(px, py, r, 0, Math.PI * 2);
+            ctx.fillStyle = s.color;
+            ctx.globalAlpha = bright;
+            ctx.fill();
+            ctx.globalAlpha = 1;
+        }
+
+        // Dim pulsing label
+        const pulse = 0.35 + 0.25 * Math.sin(ts / 700);
+        ctx.font = '700 8px "JetBrains Mono", monospace';
+        ctx.fillStyle = `rgba(86,95,137,${pulse})`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText('BUFFERING ···', W / 2, H - 8);
+        ctx.textBaseline = 'alphabetic';
+        peakValEl.textContent = '−inf';
+        rmsValEl.textContent  = '−inf';
+    }
+
+    // Throttled idle loop (~10fps) — breathing sine when no audio, stars when buffering
+    function drawIdle(ts = 0) {
+        if (analyser && !player.paused && player.readyState >= 2) {
+            loopActive = true;
+            requestAnimationFrame(draw);
+            return;
+        }
+        if (_isBuffering) {
+            drawBuffering(ts);
+            requestAnimationFrame(drawIdle);
+            return;
+        }
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = 'rgba(187,154,247,0.18)';
+        ctx.beginPath();
+        for (let x = 0; x <= canvas.width; x++) {
+            const y = canvas.height / 2 + Math.sin(x / 38 + ts / 3200) * 7;
+            x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+        peakValEl.textContent = '−inf';
+        rmsValEl.textContent  = '−inf';
+        requestAnimationFrame(drawIdle);
+    }
+
+    // Full-speed active loop (rAF ~60fps) — runs when audio is flowing
+    function draw(ts = 0) {
+        if (!analyser || player.paused) {
+            loopActive = false;
+            requestAnimationFrame(drawIdle);
+            return;
+        }
+        requestAnimationFrame(draw);
+
+        frameCount++;
+        if (ts - lastFrameTime >= 1000) {
+            fpsEl.textContent = `${frameCount} FPS`;
+            frameCount = 0;
+            lastFrameTime = ts;
+        }
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        analyser.getByteFrequencyData(freqData);
+        analyser.getByteTimeDomainData(timeData);
+        const bufLen = freqData.length;
+
+        // Spectrum bars (background)
+        const bw = canvas.width / bufLen;
+        for (let i = 0; i < bufLen; i++) {
+            const bh = (freqData[i] / 255) * canvas.height;
+            ctx.fillStyle = `rgba(122,162,247,${0.06 + (freqData[i]/255)*0.35})`;
+            ctx.fillRect(i * bw, canvas.height - bh, bw - 1, bh);
+        }
+
+        // Waveform (foreground)
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = 'rgba(125,207,255,0.85)';
+        ctx.beginPath();
+        const sw = canvas.width / bufLen;
+        let x = 0;
+        for (let i = 0; i < bufLen; i++) {
+            const y = (timeData[i] / 128.0) * (canvas.height / 2);
+            i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+            x += sw;
+        }
+        ctx.lineTo(canvas.width, canvas.height / 2);
+        ctx.stroke();
+
+        // Peak / RMS meters (calculated from timeData)
+        let sumSq = 0, peak = 0;
+        for (let i = 0; i < bufLen; i++) {
+            const v = (timeData[i] - 128) / 128;
+            sumSq += v * v;
+            if (Math.abs(v) > peak) peak = Math.abs(v);
+        }
+        const rmsVal = Math.sqrt(sumSq / bufLen);
+        const rmsDb  = rmsVal > 0 ? 20 * Math.log10(rmsVal) : -100;
+        const peakDb = peak > 0 ? 20 * Math.log10(peak) : -100;
+        
+        peakValEl.textContent = peakDb > -99 ? `${peakDb.toFixed(1)} dB` : '−inf';
+        rmsValEl.textContent  = rmsDb > -99  ? `${rmsDb.toFixed(1)} dB`  : '−inf';
+        peakValEl.style.color = peakDb > -3 ? 'var(--red)' : (peakDb > -12 ? '#ffaa00' : 'var(--green)');
+
+        // ── Silence Detection ──
+        const statusEl = document.getElementById('status');
+        const statusLight = document.getElementById('status-light');
+        const isSilent = rmsDb < -60;
+
+        if (isSilent) {
+            if (silenceStartTime === null) silenceStartTime = ts;
+            const silenceDuration = ts - silenceStartTime;
+
+            if (silenceDuration > 8000) { // 8s — accommodates stream buffering + playlist reloads
+                statusEl.textContent = 'NO SIGNAL';
+                statusEl.classList.add('silent');
+                statusLight.classList.add('off');
+            }
+        } else {
+            silenceStartTime = null;
+            if (statusEl.classList.contains('silent')) {
+                statusEl.classList.remove('silent');
+                statusEl.textContent = sourceLabel(globalActiveSource);
+                statusEl.className = 'source-name' + (globalActiveSource ? ` source-${globalActiveSource}` : '');
+                statusLight.classList.remove('off');
+            }
+        }
+    }
+
+    // Start idle animation immediately; switches to active draw() once audio flows
+    requestAnimationFrame(drawIdle);
+</script>
+</body>
+</html>

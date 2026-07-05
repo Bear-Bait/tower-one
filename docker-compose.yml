@@ -1,0 +1,17 @@
+services:
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+    container_name: tower-dashboard
+    env_file: .env
+    environment:
+      - LIQUIDSOAP_HOST=host.docker.internal
+      - LIQUIDSOAP_PORT=1234
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./music:/music
+    ports:
+      - "8080:5000"
+    restart: always

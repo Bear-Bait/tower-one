@@ -1,0 +1,18 @@
+# Secrets & credentials — never commit (see wavefarm CLAUDE.md credential policy)
+
+# Secrets & credentials — never commit
+.env
+.flask_secret
+liquidsoap/restream.pass
+users.json
+users.json.bak*
+
+# Runtime state & caches
+__pycache__/
+logs/
+music/
+
+# Backup / stale-copy cruft
+*.bak*
+*.stale-*
+*.pre-bench-promote-*
